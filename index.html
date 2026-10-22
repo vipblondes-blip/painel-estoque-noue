@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nouê — Painel de Estoque, Vendas e Faturamento (Out/26–Fev/27)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f6f4ef; --panel:#ffffff; --fg:#1d2733; --muted:#64707d; --line:#e2ddd2; --hl:#faf7f0;
+    --est:#2f7f8c; --out:#c8893a; --dez:#6a8f5f; --nec:#b23b3b; --fat:#7a5cc8;
+    --ok:#3b7d4f; --warn:#b8860b; --bad:#b23b3b; --up:#3b7d4f; --down:#b23b3b; --new:#7a5cc8;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --bg:#15191e; --panel:#1e242b; --fg:#e8eaed; --muted:#9aa5b1; --line:#333b44; --hl:#232b33;
+    --est:#4bb3c2; --out:#e0a65a; --dez:#8fbf80; --nec:#e06b6b; --fat:#a98cf0; --up:#5fb47a; --down:#e06b6b; --new:#a98cf0;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#15191e; --panel:#1e242b; --fg:#e8eaed; --muted:#9aa5b1; --line:#333b44; --hl:#232b33;
+    --est:#4bb3c2; --out:#e0a65a; --dez:#8fbf80; --nec:#e06b6b; --fat:#a98cf0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-size:15px; line-height:1.45}
+  .wrap{max-width:1280px; margin:0 auto; padding:22px 16px 100px}
+  h1{font-size:24px; margin:0 0 3px; font-weight:650}
+  .sub{color:var(--muted); margin:0 0 12px; font-size:13.5px}
+  .status{font-size:12.5px; color:var(--muted); margin-bottom:12px}
+  .tabs{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:999px; padding:8px 17px; cursor:pointer; font:inherit}
+  .tabs button.on{background:var(--est); border-color:var(--est); color:#fff; font-weight:600}
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:11px; margin-bottom:16px}
+  .tile{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 15px; border-top:4px solid var(--tc,var(--line))}
+  .tile .lbl{font-size:12px; color:var(--muted)}
+  .tile .big{font-size:24px; font-weight:680; font-variant-numeric:tabular-nums; margin-top:2px}
+  .tile .s{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin-bottom:16px}
+  .card h2{font-size:16.5px; margin:0 0 2px; font-weight:620}
+  .card .note{font-size:12.5px; color:var(--muted); margin:0 0 12px}
+  .legend{display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color:var(--muted); margin:4px 0 14px}
+  .legend span::before{content:""; display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:6px; vertical-align:-1px; background:var(--sw)}
+  .tools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+  input,select,textarea{font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg)}
+  input[type=number]{width:110px}
+  button{font:inherit; cursor:pointer; border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:8px; padding:7px 12px}
+  button.primary{background:var(--est); border-color:var(--est); color:#fff; font-weight:600}
+  button.danger{color:var(--bad); border-color:var(--bad)}
+  button.mini{padding:3px 9px; font-size:12.5px}
+  button.ghost{border-color:transparent; background:transparent; color:var(--muted)}
+  .form-grid{display:grid; grid-template-columns:1.6fr .8fr 1fr 1.1fr auto; gap:10px; align-items:end}
+  .form-grid label{display:flex; flex-direction:column; gap:4px; font-size:12.5px; color:var(--muted)}
+  @media(max-width:760px){.form-grid{grid-template-columns:1fr 1fr}}
+  .chartbox{overflow-x:auto; position:relative}
+  table{border-collapse:collapse; width:100%; font-size:12.5px; font-variant-numeric:tabular-nums}
+  th{position:sticky; top:0; background:var(--panel); text-align:right; padding:8px 7px; border-bottom:2px solid var(--line); cursor:pointer; white-space:nowrap; color:var(--muted); font-weight:600; z-index:1}
+  th.l,td.l{text-align:left}
+  td{padding:6px 7px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap}
+  td.edit-cell{cursor:text; border-radius:4px}
+  td.edit-cell:hover{background:color-mix(in srgb,var(--out) 16%,transparent); outline:1px dashed var(--out)}
+  td.edit-cell input{width:84px; padding:2px 5px; text-align:right}
+  td.txt input{width:150px; text-align:left}
+  tr:hover td{background:var(--hl)}
+  .dot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px}
+  .pill{display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px; border:1px solid var(--line)}
+  .pill.bad{color:var(--bad); border-color:var(--bad)} .pill.ok{color:var(--ok); border-color:var(--ok)} .pill.warn{color:var(--warn); border-color:var(--warn)}
+  .beh{font-weight:600; font-size:12px}
+  .beh.up{color:var(--up)} .beh.down{color:var(--down)} .beh.new{color:var(--new)} .beh.flat{color:var(--muted)}
+  .tbox{max-height:640px; overflow:auto}
+  .muted{color:var(--muted)}
+  .hint{font-size:12px; color:var(--muted); margin:6px 0}
+  .ro-note{font-size:12.5px; color:var(--warn); margin-bottom:10px}
+  .filterbar{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px}
+  .chip{border:1px solid var(--line); border-radius:999px; padding:4px 11px; cursor:pointer; font-size:12px; color:var(--muted); background:var(--panel)}
+  .chip.on{background:var(--est); color:#fff; border-color:var(--est)}
+  .spark{display:inline-flex; align-items:flex-end; gap:2px; height:26px}
+  .spark i{display:block; width:7px; background:var(--est); border-radius:2px 2px 0 0}
+  .spark i.fc{background:var(--out); opacity:.85}
+  .mrow{display:flex; gap:10px; flex-wrap:wrap; font-size:11.5px; color:var(--muted); margin-top:3px}
+  .csv-hist{font-size:12px; color:var(--muted); margin-top:8px}
+  .kv{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; margin-bottom:6px}
+  .kv b{font-variant-numeric:tabular-nums}
+  .themebtn{position:fixed; right:14px; bottom:calc(14px + env(safe-area-inset-bottom,0px)); z-index:20}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>Nouê — Estoque, Vendas e Faturamento</h1>
+  <p class="sub">Painel do time de performance · plano Out/2026 → Fev/2027 · estoque WMS (SP + MG) em 22/10 · <b>banco de dados próprio da Nouê</b>. Tudo editável e compartilhado: quando a mercadoria chega, atualize o estoque e dê baixa na necessidade — salva na hora e aparece ao vivo para todo o time.</p>
+  <div id="userwrap" style="display:flex;gap:8px;align-items:center;margin:4px 0 8px;flex-wrap:wrap">
+    <span style="font-size:12.5px;color:var(--muted)">Quem está editando:</span>
+    <input id="username" placeholder="seu nome" style="padding:5px 9px;font-size:13px;max-width:180px">
+    <span style="font-size:11.5px;color:var(--muted)">(fica registrado em cada alteração)</span>
+  </div>
+  <div id="status" class="status">Carregando…</div>
+  <div id="ronote" class="ro-note" style="display:none">Modo leitura — as edições ficam com quem tem permissão de escrita.</div>
+
+  <div class="tabs">
+    <button data-tab="geral" class="on">📊 Visão geral</button>
+    <button data-tab="vendas">📈 Vendas 6 meses &amp; faturamento</button>
+    <button data-tab="estoque">📦 Estoque &amp; chegadas</button>
+    <button data-tab="producao">🏭 Calendário de produção</button>
+    <button data-tab="compras">🛒 Calendário de compras</button>
+    <button data-tab="tabela">📋 Tabela editável</button>
+  </div>
+
+  <!-- VISÃO GERAL -->
+  <section id="tab-geral">
+    <div class="tiles">
+      <div class="tile" style="--tc:var(--est)"><div class="lbl">Estoque atual (SP+MG)</div><div class="big" id="t-est">—</div><div class="s">WMS 22/10 · saldo</div></div>
+      <div class="tile" style="--tc:var(--out)"><div class="lbl">Chega até 30/10</div><div class="big" id="t-out">—</div><div class="s">pronto na fábrica + pedidos out</div></div>
+      <div class="tile" style="--tc:var(--dez)"><div class="lbl">Programado nov/dez</div><div class="big" id="t-dez">—</div><div class="s">pedidos colocados</div></div>
+      <div class="tile" style="--tc:var(--nec)"><div class="lbl">Venda esperada Out–Fev</div><div class="big" id="t-dem">—</div><div class="s">unidades (quanto podemos vender)</div></div>
+      <div class="tile" style="--tc:var(--fat)"><div class="lbl">Faturamento previsto Out–Fev</div><div class="big" id="t-fat">—</div><div class="s">demanda × preço médio</div></div>
+      <div class="tile" style="border-top-color:var(--bad)"><div class="lbl">Falta até fev (un)</div><div class="big" id="t-falta">—</div><div class="s">venda esperada − disponível</div></div>
+      <div class="tile"><div class="lbl">SKUs em risco</div><div class="big" id="t-risco">—</div><div class="s">cobertura abaixo da venda</div></div>
+      <div class="tile"><div class="lbl">Necessidade de produção</div><div class="big" id="t-nec">—</div><div class="s">a produzir/comprar +20%</div></div>
+    </div>
+    <div class="card">
+      <h2>Como ler este painel</h2>
+      <p class="note">Quatro movimentos que todo mundo do time precisa enxergar:</p>
+      <div class="kv"><span>🟦 <b>Estoque</b> = o que já está no CD.</span><span>🟧 <b>Chegadas</b> = produção pronta + pedidos a caminho.</span><span>🟥 <b>Venda esperada</b> = quanto o canal deve vender até fev.</span><span>🟪 <b>Faturamento</b> = essa venda em R$.</span></div>
+      <p class="hint">Disponível = estoque + chegadas. Se disponível &lt; venda esperada, o SKU entra em risco (vermelho). Quando a mercadoria chegar, use a aba <b>Estoque &amp; chegadas</b> para subir o CSV do WMS ou lançar a entrada — e dê baixa na necessidade do mês.</p>
+    </div>
+    <div class="card">
+      <h2>Risco de ruptura até fevereiro</h2>
+      <p class="note">SKUs ordenados pelo tamanho da falta. Verde = coberto, amarelo = apertado, vermelho = falta produzir.</p>
+      <div class="filterbar" id="geral-filter"></div>
+      <div id="risklist"></div>
+    </div>
+  </section>
+
+  <!-- VENDAS -->
+  <section id="tab-vendas" style="display:none">
+    <div class="card">
+      <h2>Movimento de venda — 6 meses por SKU</h2>
+      <p class="note">Barras azuis = venda real (Ago, Set, Out). Barras laranja = projeção (Nov, Dez, Jan, Fev). Passe o mouse para ver os números. Clique no cabeçalho para ordenar.</p>
+      <div class="tools"><input id="busca-v" placeholder="Buscar SKU ou produto" style="min-width:220px"><span class="muted" id="cnt-v" style="font-size:12.5px"></span></div>
+      <div class="tbox">
+        <table id="tv"><thead><tr>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th class="l">Movimento (Ago→Fev)</th>
+          <th data-k="v_ago">Ago</th>
+          <th data-k="v_set">Set</th>
+          <th data-k="v_out">Out</th>
+          <th data-k="d_nov">Nov</th>
+          <th data-k="d_dez">Dez</th>
+          <th data-k="d_jan">Jan</th>
+          <th data-k="d_fev">Fev</th>
+          <th data-k="demanda">Venda esp. Out–Fev</th>
+          <th data-k="preco">Preço méd.</th>
+          <th data-k="fat">Faturam. Out–Fev</th>
+          <th data-k="beh">Tendência</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Faturamento previsto por mês (R$)</h2>
+      <p class="note">Soma da venda esperada × preço médio, mês a mês. Novembro é o pico da Black Friday.</p>
+      <div class="chartbox"><div id="chart-fat"></div></div>
+    </div>
+  </section>
+
+  <!-- ESTOQUE -->
+  <section id="tab-estoque" style="display:none">
+    <div class="card" style="border:2px solid var(--est)">
+      <h2>📤 Atualizar estoque do dia (CSV do WMS)</h2>
+      <p class="note">Suba o(s) arquivo(s) <b>produtos-…csv</b> exportados do WMS da TPL (SP e MG). O painel soma o <b>SALDO</b> por SKU e substitui a coluna “Estoque atual”. Chegadas, venda esperada e necessidade não mudam — isso você ajusta à mão.</p>
+      <div class="tools">
+        <input type="file" id="f-csv" accept=".csv,text/csv" multiple>
+        <button class="primary" id="btn-csv">Atualizar estoque</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="csv-add" checked style="width:auto"> criar SKUs novos que aparecerem no CSV</label>
+      </div>
+      <div id="csv-msg" class="hint"></div>
+      <div id="csv-hist" class="csv-hist"></div>
+    </div>
+    <div class="card">
+      <h2>Registrar chegada / dar baixa na projeção</h2>
+      <p class="note">Quando um lote chega: lance a quantidade aqui. “Chegada” soma ao estoque (ou às chegadas futuras pela data) e, se marcar, abate a mesma quantidade da necessidade daquele SKU. SKU novo é criado automaticamente.</p>
+      <div class="form-grid">
+        <label>SKU<input id="f-sku" list="sku-list" placeholder="SKU ou produto" autocomplete="off"><datalist id="sku-list"></datalist></label>
+        <label>Quantidade<input id="f-qtd" type="number" min="0" step="1" placeholder="0"></label>
+        <label>Data de chegada<input id="f-data" type="date"></label>
+        <label>Tipo<select id="f-tipo">
+          <option value="chegada">Chegada (entra no estoque/chegadas)</option>
+          <option value="estoque">Ajuste direto do estoque atual</option>
+          <option value="necessidade">Ajuste da necessidade</option>
+        </select></label>
+        <button class="primary" id="f-add">Lançar</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:10px"><input type="checkbox" id="f-baixa" checked style="width:auto"> dar baixa: abater esta quantidade da necessidade do SKU</label>
+    </div>
+    <div class="card">
+      <h2>Estoque, chegadas e necessidade por SKU</h2>
+      <div class="legend">
+        <span style="--sw:var(--est)">Estoque atual</span>
+        <span style="--sw:var(--out)">Chega até 30/10</span>
+        <span style="--sw:var(--dez)">Programado nov/dez</span>
+        <span style="--sw:var(--nec)">Necessidade até fev</span>
+      </div>
+      <div class="tools"><input id="chart-n" type="number" min="5" max="67" value="22" style="width:76px"> <span class="muted" style="font-size:12.5px">maiores no gráfico</span></div>
+      <div class="chartbox"><div id="chart"></div></div>
+    </div>
+  </section>
+
+  <!-- PRODUÇÃO -->
+  <section id="tab-producao" style="display:none">
+    <div class="tiles" id="prod-tiles"></div>
+    <div class="card">
+      <h2>Calendário de produção — o que produzir em cada mês (un, já com +20% de segurança)</h2>
+      <p class="note">Quanto precisa entrar no estoque em cada mês para cumprir a meta do canal. Clique em qualquer célula de mês para ajustar; o total recalcula sozinho. Quando o lote ficar pronto, dê baixa reduzindo o mês correspondente (ou use a aba Estoque &amp; chegadas).</p>
+      <p class="hint">⚠️ Travas do calendário: a produção de <b>novembro</b> tem de estar pronta e paga até o fim de <b>outubro</b> (a logística não recebe mercadoria em novembro). As fábricas entram em coletiva de <b>20/12 a 20/01</b>, então a produção de <b>dezembro e janeiro</b> precisa ser fechada e paga dentro de <b>novembro</b>.</p>
+      <div class="tools">
+        <input id="busca-p" placeholder="Buscar SKU ou produto" style="min-width:220px">
+        <span class="muted" id="cnt-p" style="font-size:12.5px"></span>
+        <span style="flex:1"></span>
+        <span class="muted" style="font-size:12px">mostrar</span>
+        <select id="prod-filter"><option value="prod">só com produção</option><option value="all">todos os SKUs</option><option value="A">curva A</option></select>
+      </div>
+      <div class="tbox">
+        <table id="tp"><thead><tr>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th data-k="necout">Out (rest.)</th>
+          <th data-k="necnov" style="color:var(--out)">Nov</th>
+          <th data-k="necdez">Dez</th>
+          <th data-k="necjan">Jan</th>
+          <th data-k="necfev">Fev</th>
+          <th data-k="prodTot">Total a produzir</th>
+          <th class="l">Distribuição no período</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPRAS -->
+  <section id="tab-compras" style="display:none">
+    <div class="card">
+      <h2>Janelas de compra — quando fechar e pagar cada pedido</h2>
+      <p class="note">A quantidade é a mesma do calendário de produção; aqui ela vira <b>prazo de compra</b>. Para a mercadoria entrar no mês, o pedido precisa ser fechado e pago antes, respeitando as travas de fábrica e logística.</p>
+      <div class="tiles" id="compras-tiles"></div>
+      <p class="hint">Regras das janelas: entrada de <b>novembro</b> → comprar/pagar até <b>31/10</b> (logística não recebe em nov). Entrada de <b>dezembro e janeiro</b> → fechar e pagar até <b>30/11</b> (coletiva das fábricas de 20/12 a 20/01). Entrada de <b>fevereiro</b> → produzir a partir de <b>20/01</b>, após a volta da coletiva.</p>
+    </div>
+    <div class="card">
+      <h2>O que comprar por SKU em cada janela</h2>
+      <p class="note">“Já programado” traz o que compras colocou no plano (pedidos firmes + condicionados) — clique para atualizar conforme fechar os pedidos. “Falta comprar” = total a comprar − programado.</p>
+      <div class="tools">
+        <input id="busca-c" placeholder="Buscar SKU ou produto" style="min-width:220px">
+        <span class="muted" id="cnt-c" style="font-size:12.5px"></span>
+        <span style="flex:1"></span>
+        <span class="muted" style="font-size:12px">mostrar</span>
+        <select id="compras-filter"><option value="comprar">só o que falta comprar</option><option value="prod">com necessidade</option><option value="all">todos</option><option value="A">curva A</option></select>
+      </div>
+      <div class="tbox">
+        <table id="tc"><thead><tr>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th data-k="w_out">Out (rest.)</th>
+          <th data-k="w_nov" style="color:var(--out)">Novembro<br><span class="muted" style="font-weight:400;font-size:10.5px">comprar até 31/10</span></th>
+          <th data-k="w_dez">Dezembro<br><span class="muted" style="font-weight:400;font-size:10.5px">fechar até 30/11</span></th>
+          <th data-k="w_jan">Janeiro<br><span class="muted" style="font-weight:400;font-size:10.5px">fechar até 30/11</span></th>
+          <th data-k="w_fev">Fevereiro<br><span class="muted" style="font-weight:400;font-size:10.5px">produzir ≥ 20/01</span></th>
+          <th data-k="prodTot">Total a comprar</th>
+          <th data-k="programado">Já programado</th>
+          <th data-k="faltaComprar">Falta comprar</th>
+          <th>Status</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABELA -->
+  <section id="tab-tabela" style="display:none">
+    <div class="card">
+      <h2>Tabela editável</h2>
+      <p class="note">Clique em qualquer número (estoque, chegadas, necessidade, venda esperada, preço ou a nota) para editar na hora; Enter confirma. “Editar” abre produto e curva; “Remover” apaga.</p>
+      <div class="tools">
+        <input id="busca" placeholder="Buscar SKU ou produto" style="min-width:220px">
+        <span class="muted" id="cnt" style="font-size:12.5px"></span>
+        <span style="flex:1"></span>
+        <button id="btn-add-blank" class="mini">+ Novo SKU</button>
+        <button id="btn-reset" class="mini">Restaurar originais</button>
+      </div>
+      <div class="tbox">
+        <table id="tb"><thead><tr>
+          <th class="l" data-k="sku">SKU</th>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th data-k="estoque"><span class="dot" style="background:var(--est)"></span>Estoque</th>
+          <th data-k="chega_out"><span class="dot" style="background:var(--out)"></span>30/10</th>
+          <th data-k="chega_dez"><span class="dot" style="background:var(--dez)"></span>nov/dez</th>
+          <th data-k="necessidade"><span class="dot" style="background:var(--nec)"></span>Necessid.</th>
+          <th data-k="demanda">Venda esp. Out–Fev</th>
+          <th data-k="preco">Preço</th>
+          <th data-k="disp">Estoque+chegadas</th>
+          <th data-k="faltaFev">Falta até fev</th>
+          <th>Situação</th>
+          <th class="l">Nota</th>
+          <th>Ações</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+</div>
+<button class="themebtn mini ghost" id="themebtn" title="Alternar claro/escuro">🌓</button>
+
+<script id="seed" type="application/json">[{"sku":"CAMUMEDI140ML","produto":"Tonalizante Camuflage Medium 140ml","curva":"A","cls":"Estável","estoque":67127,"chega_out":0,"chega_dez":0,"necessidade":305833,"preco":112.14,"v_ago":73443,"v_set":63555,"v_out":69260,"d_out":69260,"d_nov":138350,"d_dez":60874,"d_jan":60874,"d_fev":60874,"demanda":390232,"necout":0,"necnov":138706,"necdez":45379,"necjan":60874,"necfev":60874,"q09":63555,"q10":69260},{"sku":"CAMULIGHT140ML","produto":"Tonalizante Camuflage Light - 140ml","curva":"A","cls":"Crescimento","estoque":59468,"chega_out":10000,"chega_dez":0,"necessidade":52046,"preco":111.39,"v_ago":18909,"v_set":18875,"v_out":22480,"d_out":22480,"d_nov":46833,"d_dez":20607,"d_jan":20607,"d_fev":20607,"demanda":131134,"necout":0,"necnov":0,"necdez":10832,"necjan":20607,"necfev":20607,"q09":18875,"q10":22480},{"sku":"COLGLOW60G","produto":"Coloração Glow 60g","curva":"A","cls":"Queda forte","estoque":19627,"chega_out":5000,"chega_dez":0,"necessidade":290,"preco":100.06,"v_ago":4586,"v_set":6157,"v_out":3278,"d_out":3278,"d_nov":9829,"d_dez":4325,"d_jan":4325,"d_fev":4325,"demanda":26082,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":290,"q09":6157,"q10":3278},{"sku":"NOVOSHAMPOONOUE140ML","produto":"PRIVATE - Shampoo camuflage 140ml novo","curva":"A","cls":"Crescimento","estoque":40947,"chega_out":5000,"chega_dez":0,"necessidade":53112,"preco":22.96,"v_ago":16198,"v_set":15808,"v_out":18286,"d_out":18286,"d_nov":38096,"d_dez":16762,"d_jan":16762,"d_fev":16762,"demanda":106668,"necout":0,"necnov":7093,"necdez":12495,"necjan":16762,"necfev":16762,"q09":15808,"q10":18286},{"sku":"CAMUTOUCHCE","produto":"Camuflage Touch Castanho Escuro","curva":"B","cls":"Novo em Set","estoque":4016,"chega_out":10800,"chega_dez":19750,"necessidade":0,"preco":61.05,"v_ago":0,"v_set":7,"v_out":5898,"d_out":5898,"d_nov":12288,"d_dez":5407,"d_jan":5407,"d_fev":5407,"demanda":34407,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":7,"q10":5898},{"sku":"CAMUPEARL140ML","produto":"Tonalizante Camuflage Pérola140ml (PARA CABELOS 100% BRANCOS)","curva":"B","cls":"Estável","estoque":4460,"chega_out":2500,"chega_dez":0,"necessidade":10255,"preco":106.89,"v_ago":3267,"v_set":3326,"v_out":3074,"d_out":3074,"d_nov":6667,"d_dez":2933,"d_jan":2933,"d_fev":2933,"demanda":18540,"necout":0,"necnov":2202,"necdez":2187,"necjan":2933,"necfev":2933,"q09":3326,"q10":3074},{"sku":"MASCARACAMU150G","produto":"Máscara Camuflage 150g","curva":"B","cls":"Queda","estoque":14886,"chega_out":0,"chega_dez":0,"necessidade":2592,"preco":80.52,"v_ago":3272,"v_set":3853,"v_out":2698,"d_out":2698,"d_nov":6825,"d_dez":3003,"d_jan":3003,"d_fev":3003,"demanda":18532,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":2592,"q09":3853,"q10":2698},{"sku":"CAMUMEDI1L","produto":"Tonalizante Camuflage Médium - 1L","curva":"B","cls":"Queda","estoque":2628,"chega_out":500,"chega_dez":0,"necessidade":131,"preco":400.53,"v_ago":721,"v_set":670,"v_out":539,"d_out":539,"d_nov":1260,"d_dez":555,"d_jan":555,"d_fev":555,"demanda":3464,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":131,"q09":670,"q10":539},{"sku":"CAMUTOUCHECC","produto":"Camuflage Touch Castanho Claro","curva":"B","cls":"Novo em Set","estoque":4319,"chega_out":4100,"chega_dez":11200,"necessidade":0,"preco":67.06,"v_ago":0,"v_set":5,"v_out":3132,"d_out":3132,"d_nov":6525,"d_dez":2871,"d_jan":2871,"d_fev":2871,"demanda":18270,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":5,"q10":3132},{"sku":"CAMUTOUCH","produto":"Camuflage Touch Preto","curva":"B","cls":"Novo em Set","estoque":4400,"chega_out":3600,"chega_dez":10450,"necessidade":0,"preco":68.31,"v_ago":0,"v_set":5,"v_out":2931,"d_out":2931,"d_nov":6106,"d_dez":2687,"d_jan":2687,"d_fev":2687,"demanda":17098,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":5,"q10":2931},{"sku":"SHAMPOOPRECAMU140ML","produto":"Shampoo Pré Camuflage 140ml","curva":"B","cls":"Novo em Set","estoque":20535,"chega_out":0,"chega_dez":0,"necessidade":2589,"preco":41.77,"v_ago":0,"v_set":881,"v_out":4272,"d_out":4272,"d_nov":8900,"d_dez":3916,"d_jan":3916,"d_fev":3916,"demanda":24920,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":2589,"q09":881,"q10":4272},{"sku":"MELANOREATIV","produto":"Serum Melano-Reativ 3% - 50ml","curva":"B","cls":"Novo em Set","estoque":0,"chega_out":0,"chega_dez":0,"necessidade":3202,"preco":219.68,"v_ago":0,"v_set":401,"v_out":584,"d_out":584,"d_nov":1217,"d_dez":535,"d_jan":535,"d_fev":535,"demanda":3406,"necout":328,"necnov":1405,"necdez":399,"necjan":535,"necfev":535,"q09":401,"q10":584},{"sku":"COULEURSPEROLA140ML","produto":"Tonalizante Couleurs Pérola - 140ml","curva":"B","cls":"Estável","estoque":2760,"chega_out":0,"chega_dez":0,"necessidade":3603,"preco":107.94,"v_ago":1087,"v_set":1184,"v_out":1180,"d_out":1180,"d_nov":2463,"d_dez":1084,"d_jan":1084,"d_fev":1084,"demanda":6895,"necout":0,"necnov":627,"necdez":808,"necjan":1084,"necfev":1084,"q09":1184,"q10":1180},{"sku":"CAMUTOUCHLE","produto":"Camuflage Touch Loiro Escuro","curva":"B","cls":"Novo em Set","estoque":4889,"chega_out":0,"chega_dez":5950,"necessidade":0,"preco":68.67,"v_ago":0,"v_set":8,"v_out":1849,"d_out":1849,"d_nov":3852,"d_dez":1695,"d_jan":1695,"d_fev":1695,"demanda":10786,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":8,"q10":1849},{"sku":"CAMUCOOPER140ML","produto":"Tonalizante Camuflage Cooper 140ml","curva":"B","cls":"Queda","estoque":1174,"chega_out":0,"chega_dez":0,"necessidade":5100,"preco":104.85,"v_ago":1467,"v_set":1352,"v_out":990,"d_out":990,"d_nov":2440,"d_dez":1073,"d_jan":1073,"d_fev":1073,"demanda":6649,"necout":0,"necnov":2154,"necdez":800,"necjan":1073,"necfev":1073,"q09":1352,"q10":990},{"sku":"SPRAYREGENERNV200ML","produto":"Finalizador Protetor Térmico Spray Regenér 200ml","curva":"B","cls":"Queda forte","estoque":4616,"chega_out":2106,"chega_dez":0,"necessidade":4942,"preco":58.9,"v_ago":1676,"v_set":2459,"v_out":932,"d_out":932,"d_nov":3533,"d_dez":1555,"d_jan":1555,"d_fev":1555,"demanda":9130,"necout":0,"necnov":673,"necdez":1159,"necjan":1555,"necfev":1555,"q09":2459,"q10":932},{"sku":"COLGLOWINTENSE60G","produto":"Coloração Glow Intense 60g","curva":"B","cls":"Queda forte","estoque":6790,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":106.07,"v_ago":1165,"v_set":1240,"v_out":569,"d_out":569,"d_nov":1885,"d_dez":830,"d_jan":830,"d_fev":830,"demanda":4944,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":1240,"q10":569},{"sku":"CAMULIGHT1L","produto":"Tonalizante Camuflage Light - 1L","curva":"B","cls":"Queda forte","estoque":1911,"chega_out":1101,"chega_dez":0,"necessidade":0,"preco":368.21,"v_ago":215,"v_set":318,"v_out":177,"d_out":177,"d_nov":517,"d_dez":227,"d_jan":227,"d_fev":227,"demanda":1375,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":318,"q10":177},{"sku":"OLEOREGENER30ML2","produto":"Óleo Nutritivo Reparador Regenér 30ml","curva":"B","cls":"Queda forte","estoque":4096,"chega_out":1781,"chega_dez":0,"necessidade":4078,"preco":57.12,"v_ago":1714,"v_set":1990,"v_out":1022,"d_out":1022,"d_nov":3138,"d_dez":1381,"d_jan":1381,"d_fev":1381,"demanda":8303,"necout":0,"necnov":287,"necdez":1029,"necjan":1381,"necfev":1381,"q09":1990,"q10":1022},{"sku":"10OXIGENADAOX900ML","produto":"Oxidante 10 volumes","curva":"B","cls":"Queda forte","estoque":1823,"chega_out":986,"chega_dez":0,"necessidade":4920,"preco":56.69,"v_ago":1600,"v_set":1906,"v_out":1016,"d_out":1016,"d_nov":3044,"d_dez":1339,"d_jan":1339,"d_fev":1339,"demanda":8077,"necout":0,"necnov":1244,"necdez":998,"necjan":1339,"necfev":1339,"q09":1906,"q10":1016},{"sku":"NOVOSHAMPOOCAMUFLAGE1LITRO","produto":"Shampoo Nouê 1 litro (PRIVATE)","curva":"B","cls":"Queda","estoque":4307,"chega_out":0,"chega_dez":0,"necessidade":1258,"preco":76.76,"v_ago":1262,"v_set":1155,"v_out":922,"d_out":922,"d_nov":2165,"d_dez":952,"d_jan":952,"d_fev":952,"demanda":5943,"necout":0,"necnov":0,"necdez":0,"necjan":306,"necfev":952,"q09":1155,"q10":922},{"sku":"COULEURSMANTEIGA140ML","produto":"Tonalizante Couleurs Manteiga - 140ml","curva":"B","cls":"Queda","estoque":4643,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":112.39,"v_ago":756,"v_set":696,"v_out":635,"d_out":635,"d_nov":1388,"d_dez":611,"d_jan":611,"d_fev":611,"demanda":3856,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":696,"q10":635},{"sku":"CAMUGRAY140ML","produto":"Tonalizante Camuflage Gray 140ml","curva":"B","cls":"Queda forte","estoque":2321,"chega_out":0,"chega_dez":0,"necessidade":1690,"preco":94.01,"v_ago":1124,"v_set":1108,"v_out":426,"d_out":426,"d_nov":1598,"d_dez":703,"d_jan":703,"d_fev":703,"demanda":4133,"necout":0,"necnov":0,"necdez":284,"necjan":703,"necfev":703,"q09":1108,"q10":426},{"sku":"COULEURSAVELA140ML","produto":"Tonalizante Couleurs Avelã - 140ml","curva":"C","cls":"Queda","estoque":5530,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":107.57,"v_ago":696,"v_set":592,"v_out":541,"d_out":541,"d_nov":1181,"d_dez":520,"d_jan":520,"d_fev":520,"demanda":3282,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":592,"q10":541},{"sku":"MASCARAREGENER250G","produto":"Máscara de Nutrição Intensiva Regenér 250g","curva":"C","cls":"Queda","estoque":2044,"chega_out":0,"chega_dez":0,"necessidade":995,"preco":92.36,"v_ago":589,"v_set":614,"v_out":517,"d_out":517,"d_nov":1179,"d_dez":519,"d_jan":519,"d_fev":519,"demanda":3253,"necout":0,"necnov":0,"necdez":0,"necjan":476,"necfev":519,"q09":614,"q10":517},{"sku":"COULEURSCHOCOLAT140ML","produto":"Tonalizante Couleurs Chocolat - 140ml","curva":"C","cls":"Crescimento","estoque":188,"chega_out":0,"chega_dez":0,"necessidade":2489,"preco":98.94,"v_ago":87,"v_set":814,"v_out":496,"d_out":496,"d_nov":1033,"d_dez":455,"d_jan":455,"d_fev":455,"demanda":2894,"necout":46,"necnov":1194,"necdez":339,"necjan":455,"necfev":455,"q09":814,"q10":496},{"sku":"PERFUMERENEGER50ML","produto":"Perfume Regenér 50ml","curva":"C","cls":"Queda forte","estoque":1562,"chega_out":500,"chega_dez":0,"necessidade":1925,"preco":69.28,"v_ago":989,"v_set":1059,"v_out":453,"d_out":453,"d_nov":1575,"d_dez":693,"d_jan":693,"d_fev":693,"demanda":4107,"necout":0,"necnov":22,"necdez":517,"necjan":693,"necfev":693,"q09":1059,"q10":453},{"sku":"COULEURSDOCE140ML","produto":"Tonalizante Couleurs Doce de Leite - 140ml","curva":"C","cls":"Queda forte","estoque":6246,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":105.34,"v_ago":615,"v_set":514,"v_out":393,"d_out":393,"d_nov":946,"d_dez":416,"d_jan":416,"d_fev":416,"demanda":2587,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":514,"q10":393},{"sku":"CAMUTOUCHLC","produto":"Camuflage Touch Loiro Claro","curva":"C","cls":"Novo em Set","estoque":6199,"chega_out":0,"chega_dez":2650,"necessidade":0,"preco":60.07,"v_ago":0,"v_set":7,"v_out":744,"d_out":744,"d_nov":1550,"d_dez":682,"d_jan":682,"d_fev":682,"demanda":4340,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":7,"q10":744},{"sku":"CAMUSILVER140ML","produto":"Tonalizante Camuflage Silver 140ml","curva":"C","cls":"Queda forte","estoque":2819,"chega_out":2300,"chega_dez":0,"necessidade":0,"preco":77.95,"v_ago":1051,"v_set":918,"v_out":287,"d_out":287,"d_nov":1256,"d_dez":553,"d_jan":553,"d_fev":553,"demanda":3202,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":918,"q10":287},{"sku":"COULEURSMEL140ML","produto":"Tonalizante Couleurs Mel - 140ml","curva":"C","cls":"Queda forte","estoque":7362,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":99.06,"v_ago":534,"v_set":523,"v_out":318,"d_out":318,"d_nov":877,"d_dez":386,"d_jan":386,"d_fev":386,"demanda":2353,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":523,"q10":318},{"sku":"SHAMPOOREGENER250MLNOVO","produto":"Shampoo Nutritivo Regenér 250ml NOVO*","curva":"C","cls":"Queda forte","estoque":621,"chega_out":0,"chega_dez":0,"necessidade":2536,"preco":66.21,"v_ago":581,"v_set":743,"v_out":443,"d_out":443,"d_nov":1235,"d_dez":544,"d_jan":544,"d_fev":544,"demanda":3310,"necout":0,"necnov":1042,"necdez":406,"necjan":544,"necfev":544,"q09":743,"q10":443},{"sku":"KITRAPIDOGLOW","produto":"Kit de Coloração Rápida Profissional - Glow + 0X10 120ml","curva":"C","cls":"Queda forte","estoque":4744,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":64.95,"v_ago":1009,"v_set":962,"v_out":256,"d_out":256,"d_nov":1269,"d_dez":558,"d_jan":558,"d_fev":558,"demanda":3199,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":962,"q10":256},{"sku":"COULEURSCANNELLE140ML","produto":"Tonalizante Couleurs Cannelle - 140ml","curva":"C","cls":"Queda","estoque":568,"chega_out":0,"chega_dez":0,"necessidade":1917,"preco":74.74,"v_ago":16,"v_set":687,"v_out":256,"d_out":256,"d_nov":983,"d_dez":433,"d_jan":433,"d_fev":433,"demanda":2538,"necout":0,"necnov":728,"necdez":323,"necjan":433,"necfev":433,"q09":687,"q10":256},{"sku":"COULEURSCUIVRE140ML","produto":"Tonalizante Couleurs Cuivré - 140ml","curva":"C","cls":"Queda forte","estoque":2953,"chega_out":0,"chega_dez":0,"necessidade":1807,"preco":72.26,"v_ago":10,"v_set":690,"v_out":237,"d_out":237,"d_nov":967,"d_dez":425,"d_jan":425,"d_fev":425,"demanda":2479,"necout":0,"necnov":640,"necdez":317,"necjan":425,"necfev":425,"q09":690,"q10":237},{"sku":"MASCARAREGENER500G","produto":"Máscara de Nutrição Intensiva Regenér 500g","curva":"C","cls":"Queda forte","estoque":1700,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":166.18,"v_ago":511,"v_set":338,"v_out":71,"d_out":71,"d_nov":427,"d_dez":188,"d_jan":188,"d_fev":188,"demanda":1062,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":338,"q10":71},{"sku":"MASCARAFORTIFYE500G","produto":"Reconstruction Mask 500g","curva":"C","cls":"Novo em Set","estoque":1974,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":229.17,"v_ago":0,"v_set":141,"v_out":128,"d_out":128,"d_nov":267,"d_dez":117,"d_jan":117,"d_fev":117,"demanda":746,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":141,"q10":128},{"sku":"SERUMREGENERADOR","produto":"Serum Vital - GHK Cu - 30ml","curva":"C","cls":"Novo em Out","estoque":689,"chega_out":0,"chega_dez":0,"necessidade":329,"preco":139.74,"v_ago":0,"v_set":0,"v_out":188,"d_out":188,"d_nov":392,"d_dez":172,"d_jan":172,"d_fev":172,"demanda":1096,"necout":0,"necnov":0,"necdez":0,"necjan":157,"necfev":172,"q09":0,"q10":188},{"sku":"COULEURSPEROLA500ML","produto":"Tonalizante Couleurs Pérola - 500ml","curva":"C","cls":"Queda forte","estoque":758,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":221.81,"v_ago":73,"v_set":140,"v_out":68,"d_out":68,"d_nov":217,"d_dez":95,"d_jan":95,"d_fev":95,"demanda":570,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":140,"q10":68},{"sku":"CAMUPEARL1L","produto":"Tonalizante Camuflage Pérola - 1L","curva":"C","cls":"Queda forte","estoque":629,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":346.13,"v_ago":48,"v_set":69,"v_out":24,"d_out":24,"d_nov":98,"d_dez":43,"d_jan":43,"d_fev":43,"demanda":251,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":69,"q10":24},{"sku":"PERFUMEFORTIFYE50ML","produto":"Perfume Fortifye 50ml","curva":"C","cls":"Novo em Set","estoque":1635,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":81.28,"v_ago":0,"v_set":45,"v_out":133,"d_out":133,"d_nov":277,"d_dez":122,"d_jan":122,"d_fev":122,"demanda":776,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":45,"q10":133},{"sku":"COULEURSMANTEIGA500ML","produto":"Tonalizante Couleurs Manteiga - 500ml","curva":"C","cls":"Queda forte","estoque":1174,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":209.08,"v_ago":99,"v_set":58,"v_out":41,"d_out":41,"d_nov":104,"d_dez":46,"d_jan":46,"d_fev":46,"demanda":283,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":58,"q10":41},{"sku":"SHAMPOOREGENER1L","produto":"Shampoo Nutritivo Regenér 1L","curva":"C","cls":"Queda forte","estoque":759,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":125.54,"v_ago":114,"v_set":104,"v_out":58,"d_out":58,"d_nov":169,"d_dez":74,"d_jan":74,"d_fev":74,"demanda":449,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":104,"q10":58},{"sku":"OLEOFORTIFYE30ML","produto":"Óleo Nutritivo Recontrutor Fortifye 30ml","curva":"C","cls":"Novo em Set","estoque":1656,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":61.8,"v_ago":0,"v_set":48,"v_out":141,"d_out":141,"d_nov":294,"d_dez":129,"d_jan":129,"d_fev":129,"demanda":822,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":48,"q10":141},{"sku":"GELFORTIFYE250ML","produto":"Reconstruction Gel 250ml","curva":"C","cls":"Novo em Set","estoque":1722,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":137.66,"v_ago":0,"v_set":43,"v_out":62,"d_out":62,"d_nov":129,"d_dez":57,"d_jan":57,"d_fev":57,"demanda":362,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":43,"q10":62},{"sku":"MASCARASILVERY500G","produto":"Máscara Silvery 500g","curva":"C","cls":"Queda forte","estoque":1000,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":123.19,"v_ago":135,"v_set":103,"v_out":30,"d_out":30,"d_nov":140,"d_dez":61,"d_jan":61,"d_fev":61,"demanda":353,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":103,"q10":30},{"sku":"LEAVEINFORTIFYE200ML","produto":"Leave-in 200ml","curva":"C","cls":"Novo em Set","estoque":1892,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":75.92,"v_ago":0,"v_set":676,"v_out":96,"d_out":96,"d_nov":200,"d_dez":88,"d_jan":88,"d_fev":88,"demanda":560,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":676,"q10":96},{"sku":"Shampoocamuflage1litro","produto":"Shampoo Nouê 1 litro","curva":"C","cls":"Queda forte","estoque":0,"chega_out":0,"chega_dez":0,"necessidade":320,"preco":123.61,"v_ago":13,"v_set":119,"v_out":6,"d_out":6,"d_nov":131,"d_dez":58,"d_jan":58,"d_fev":58,"demanda":311,"necout":4,"necnov":156,"necdez":44,"necjan":58,"necfev":58,"q09":119,"q10":6},{"sku":"COULEURSAVELA500ML","produto":"Tonalizante Couleurs Avelã - 500ml","curva":"C","cls":"Queda forte","estoque":839,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":199.57,"v_ago":84,"v_set":26,"v_out":36,"d_out":36,"d_nov":65,"d_dez":28,"d_jan":28,"d_fev":28,"demanda":185,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":26,"q10":36},{"sku":"F9GTJD8XSP","produto":"Shampoo Nouê 140ml","curva":"C","cls":"Queda","estoque":14,"chega_out":0,"chega_dez":0,"necessidade":953,"preco":34.69,"v_ago":124,"v_set":211,"v_out":147,"d_out":147,"d_nov":373,"d_dez":164,"d_jan":164,"d_fev":164,"demanda":1012,"necout":69,"necnov":434,"necdez":122,"necjan":164,"necfev":164,"q09":211,"q10":147},{"sku":"MASCARAFORTIFYE250G","produto":"Reconstruction Mask 250g","curva":"C","cls":"Novo em Set","estoque":2029,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":101.5,"v_ago":0,"v_set":75,"v_out":58,"d_out":58,"d_nov":121,"d_dez":53,"d_jan":53,"d_fev":53,"demanda":338,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":75,"q10":58},{"sku":"SHAMPOOFORTIFYE250ML","produto":"Reconstruction Shampoo 250ml","curva":"C","cls":"Novo em Set","estoque":1949,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":60.42,"v_ago":0,"v_set":668,"v_out":94,"d_out":94,"d_nov":196,"d_dez":86,"d_jan":86,"d_fev":86,"demanda":548,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":668,"q10":94},{"sku":"COULEURSDOCE500ML","produto":"Tonalizante Couleurs Doce de Leite - 500ml","curva":"C","cls":"Queda forte","estoque":1170,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":191.33,"v_ago":76,"v_set":21,"v_out":30,"d_out":30,"d_nov":54,"d_dez":24,"d_jan":24,"d_fev":24,"demanda":156,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":21,"q10":30},{"sku":"SHAMPOOSILVERY250ML","produto":"Shampoo Silvery 250ml","curva":"C","cls":"Crescimento forte","estoque":652,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":79.15,"v_ago":33,"v_set":52,"v_out":62,"d_out":62,"d_nov":129,"d_dez":57,"d_jan":57,"d_fev":57,"demanda":362,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":52,"q10":62},{"sku":"OLEOREGENER30ML","produto":"Óleo Nutritivo Reparador Nouê Regenér 30ml Brilho Antifrizz","curva":"C","cls":"Queda forte","estoque":0,"chega_out":0,"chega_dez":0,"necessidade":307,"preco":86.77,"v_ago":93,"v_set":94,"v_out":23,"d_out":23,"d_nov":123,"d_dez":54,"d_jan":54,"d_fev":54,"demanda":308,"necout":13,"necnov":146,"necdez":40,"necjan":54,"necfev":54,"q09":94,"q10":23},{"sku":"LUMIERE500G","produto":"Pó Descolorante Lumiére Blanc - 500g","curva":"C","cls":"Queda forte","estoque":2015,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":102.4,"v_ago":44,"v_set":60,"v_out":32,"d_out":32,"d_nov":96,"d_dez":42,"d_jan":42,"d_fev":42,"demanda":254,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":60,"q10":32},{"sku":"MASCARASILVERY300G","produto":"Máscara Silvery 300g","curva":"C","cls":"Crescimento forte","estoque":511,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":80.1,"v_ago":29,"v_set":25,"v_out":54,"d_out":54,"d_nov":113,"d_dez":50,"d_jan":50,"d_fev":50,"demanda":317,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":25,"q10":54},{"sku":"COULEURSMEL500ML","produto":"Tonalizante Couleurs Mel - 500ml","curva":"C","cls":"Queda forte","estoque":1384,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":177.26,"v_ago":64,"v_set":21,"v_out":19,"d_out":19,"d_nov":42,"d_dez":18,"d_jan":18,"d_fev":18,"demanda":115,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":21,"q10":19},{"sku":"SHAMPOOFORTIFYE1L","produto":"Reconstruction Shampoo 1L","curva":"C","cls":"Novo em Set","estoque":1586,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":152.1,"v_ago":0,"v_set":614,"v_out":23,"d_out":23,"d_nov":48,"d_dez":21,"d_jan":21,"d_fev":21,"demanda":134,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":614,"q10":23},{"sku":"10OXIGENADA120ML","produto":"Ox10 volumes 120ML","curva":"C","cls":"Queda forte","estoque":4081,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":11.57,"v_ago":1488,"v_set":493,"v_out":101,"d_out":101,"d_nov":619,"d_dez":272,"d_jan":272,"d_fev":272,"demanda":1536,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":493,"q10":101},{"sku":"SHAMPOOSILVERY1L","produto":"Shampoo Silvery 1L","curva":"C","cls":"Estável","estoque":1212,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":103.0,"v_ago":27,"v_set":21,"v_out":23,"d_out":23,"d_nov":46,"d_dez":20,"d_jan":20,"d_fev":20,"demanda":129,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":21,"q10":23},{"sku":"20OXIGENADAOX900ML","produto":"OX 20 VOLUMES","curva":"C","cls":"Crescimento","estoque":864,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":69.27,"v_ago":21,"v_set":29,"v_out":30,"d_out":30,"d_nov":63,"d_dez":28,"d_jan":28,"d_fev":28,"demanda":177,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":29,"q10":30},{"sku":"GELFORTIFYE1L","produto":"Reconstruction Gel 1L","curva":"C","cls":"Novo em Set","estoque":840,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":313.51,"v_ago":0,"v_set":2,"v_out":6,"d_out":6,"d_nov":13,"d_dez":6,"d_jan":6,"d_fev":6,"demanda":37,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":2,"q10":6},{"sku":"30OXIGENADAOX900ML","produto":"OX 30 VOLUMES","curva":"C","cls":"Queda","estoque":1174,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":50.4,"v_ago":34,"v_set":41,"v_out":30,"d_out":30,"d_nov":75,"d_dez":33,"d_jan":33,"d_fev":33,"demanda":204,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":41,"q10":30},{"sku":"SHAMPOOREGENER250ML","produto":"Shampoo Nutritivo Regenér 250ml","curva":"C","cls":"Queda forte","estoque":75,"chega_out":0,"chega_dez":0,"necessidade":69,"preco":54.53,"v_ago":77,"v_set":36,"v_out":17,"d_out":17,"d_nov":56,"d_dez":25,"d_jan":25,"d_fev":25,"demanda":148,"necout":0,"necnov":0,"necdez":19,"necjan":25,"necfev":25,"q09":36,"q10":17},{"sku":"PROTEINE1L","produto":"Alinhamento Capilar Protéine - 1L","curva":"C","cls":"Crescimento forte","estoque":771,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":111.96,"v_ago":1,"v_set":0,"v_out":6,"d_out":6,"d_nov":13,"d_dez":6,"d_jan":6,"d_fev":6,"demanda":37,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":0,"q10":6},{"sku":"SPRAYREGENER200ML","produto":"Finalizador Protetor Térmico Spray Regenér 250ml","curva":"C","cls":"Queda forte","estoque":13,"chega_out":0,"chega_dez":0,"necessidade":0,"preco":0.0,"v_ago":1,"v_set":0,"v_out":0,"d_out":0,"d_nov":0,"d_dez":0,"d_jan":0,"d_fev":0,"demanda":0,"necout":0,"necnov":0,"necdez":0,"necjan":0,"necfev":0,"q09":0,"q10":0}]</script>
+<script>
+const SEED=JSON.parse(document.getElementById('seed').textContent);
+const fmt=d3.format(','), pfmt=d3.format('+.0%');
+const cfmt=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
+const brl=v=>'R$ '+new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1}).format(v);
+const num=v=>Number(v)||0, todayISO=new Date().toISOString().slice(0,10);
+const MESES=[['v_ago','Ago',0],['v_set','Set',0],['v_out','Out',0],['d_nov','Nov',1],['d_dez','Dez',1],['d_jan','Jan',1],['d_fev','Fev',1]];
+let rows=SEED.map(d=>({...d}));
+
+let tab='geral', sortKey='demanda', sortAsc=false, sortKeyV='fat', sortAscV=false, busca='', buscaV='', cellEdit=null, gfilter='all';
+let sortKeyP='prodTot', sortAscP=false, buscaP='', prodFilter='prod';
+let sortKeyC='faltaComprar', sortAscC=false, buscaC='', comprasFilter='comprar';
+const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"plano":22000,"status":"Plano acima do necessário"},"CAMUTOUCHECC":{"plano":11200,"status":"Bate"},"CAMUTOUCH":{"plano":10450,"status":"Bate"},"MELANOREATIV":{"plano":1200,"status":"ROMPE com o plano"},"COULEURSPEROLA140ML":{"plano":2000,"status":"ROMPE com o plano"},"CAMUTOUCHLE":{"plano":5950,"status":"Bate"},"CAMUTOUCHLC":{"plano":2650,"status":"Plano acima do necessário"},"Shampoocamuflage1litro":{"plano":0,"status":"Sem demanda"},"F9GTJD8XSP":{"plano":0,"status":"Sem demanda"},"OLEOREGENER30ML":{"plano":0,"status":"Sem demanda"},"SHAMPOOREGENER250ML":{"plano":0,"status":"Sem demanda"},"CAMUMEDI140ML":{"plano":300000,"status":"Bate"},"CAMUMEDI1L":{"plano":2300,"status":"Plano acima do necessário"},"10OXIGENADAOX900ML":{"plano":6000,"status":"Bate"},"NOVOSHAMPOOCAMUFLAGE1LITRO":{"plano":10000,"status":"Plano acima do necessário"},"NOVOSHAMPOONOUE140ML":{"plano":50000,"status":"ROMPE com o plano"},"CAMUCOOPER140ML":{"plano":5000,"status":"Bate"},"COULEURSCHOCOLAT140ML":{"plano":2500,"status":"Bate"},"CAMULIGHT140ML":{"plano":100000,"status":"Bate"},"COLGLOW60G":{"plano":25000,"status":"Plano acima do necessário"},"MASCARACAMU150G":{"plano":20000,"status":"Plano acima do necessário"},"SHAMPOOPRECAMU140ML":{"plano":25000,"status":"Plano acima do necessário"},"SPRAYREGENERNV200ML":{"plano":10000,"status":"Plano acima do necessário"},"COLGLOWINTENSE60G":{"plano":0,"status":"Bate"},"CAMULIGHT1L":{"plano":2000,"status":"Bate"},"OLEOREGENER30ML2":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSMANTEIGA140ML":{"plano":0,"status":"Bate"},"CAMUGRAY140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSAVELA140ML":{"plano":0,"status":"Bate"},"MASCARAREGENER250G":{"plano":4000,"status":"Plano acima do necessário"},"PERFUMERENEGER50ML":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSDOCE140ML":{"plano":0,"status":"Bate"},"CAMUSILVER140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSMEL140ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER250MLNOVO":{"plano":4000,"status":"Bate"},"KITRAPIDOGLOW":{"plano":0,"status":"Bate"},"COULEURSCANNELLE140ML":{"plano":2500,"status":"Bate"},"MASCARAREGENER500G":{"plano":1000,"status":"Bate"},"COULEURSCUIVRE140ML":{"plano":2500,"status":"Bate"},"MASCARAFORTIFYE500G":{"plano":1000,"status":"Bate"},"SERUMREGENERADOR":{"plano":2500,"status":"Plano acima do necessário"},"COULEURSPEROLA500ML":{"plano":0,"status":"Bate"},"CAMUPEARL1L":{"plano":0,"status":"Bate"},"PERFUMEFORTIFYE50ML":{"plano":0,"status":"Bate"},"COULEURSMANTEIGA500ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER1L":{"plano":500,"status":"Bate"},"OLEOFORTIFYE30ML":{"plano":0,"status":"Bate"},"GELFORTIFYE250ML":{"plano":1000,"status":"Bate"},"MASCARASILVERY500G":{"plano":0,"status":"Bate"},"LEAVEINFORTIFYE200ML":{"plano":0,"status":"Bate"},"COULEURSAVELA500ML":{"plano":0,"status":"Bate"},"MASCARAFORTIFYE250G":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE250ML":{"plano":1000,"status":"Bate"},"COULEURSDOCE500ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY250ML":{"plano":0,"status":"Bate"},"LUMIERE500G":{"plano":0,"status":"Bate"},"MASCARASILVERY300G":{"plano":0,"status":"Bate"},"COULEURSMEL500ML":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE1L":{"plano":0,"status":"Bate"},"10OXIGENADA120ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY1L":{"plano":0,"status":"Bate"},"20OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"GELFORTIFYE1L":{"plano":0,"status":"Bate"},"30OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"PROTEINE1L":{"plano":0,"status":"Bate"}};
+
+/* ---- persistência: Supabase (banco próprio da Nouê) ---- */
+const SB_URL='https://hsqehrwvlkkuuvrszbzq.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzcWVocnd2bGtrdXV2cnN6YnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NjQzOTcsImV4cCI6MjA5NjM0MDM5N30.dF5XJi6mCoXh1vrsc_w8pZCHeEip4FPsTnW4PEpilv8';
+const TBL='painel_estoque';
+let sb=null, userName=localStorage.getItem('noue_user')||'';
+const setStatus=m=>document.getElementById('status').textContent=m;
+const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null)r[k]=o[k];return r;};
+const FIELDS=['estoque','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
+const hora=()=>new Date().toLocaleTimeString('pt-BR').slice(0,5);
+
+async function loadAll(){
+  const {data,error}=await sb.from(TBL).select('sku,data').order('sku');
+  if(error){ setStatus('⚠️ Erro ao carregar do banco: '+error.message); return false; }
+  if(data&&data.length){ rows=data.map(r=>({...(r.data||{}),sku:r.sku})); }
+  return true;
+}
+async function boot(){
+  const ron=document.getElementById('ronote');
+  try{ sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
+  if(!sb){ ron.style.display='block'; ron.innerHTML='⚠️ Não foi possível conectar ao banco. Verifique a conexão com a internet.'; setStatus('Sem conexão com o banco.'); render(); return; }
+  // Campo de nome do usuário (registra quem edita)
+  const uWrap=document.getElementById('userwrap');
+  if(uWrap){ const inp=document.getElementById('username'); inp.value=userName;
+    inp.oninput=()=>{ userName=inp.value.trim(); localStorage.setItem('noue_user',userName); }; }
+  const ok=await loadAll();
+  if(ok){ ron.style.display='none'; setStatus('✅ Conectado ao banco da Nouê — tudo que você editar fica salvo e aparece ao vivo para a equipe · '+hora()); }
+  render();
+  // Tempo real: qualquer alteração de qualquer pessoa recarrega o painel
+  try{
+    sb.channel('painel_rt').on('postgres_changes',{event:'*',schema:'public',table:TBL},async()=>{ await loadAll(); setStatus('✅ Sincronizado com a equipe · '+hora()); render(); }).subscribe();
+  }catch(e){}
+}
+async function saveRow(d){
+  const row=strip({sku:d.sku,produto:d.produto||d.sku,curva:d.curva||'C',cls:d.cls||'',nota:d.nota||''});
+  FIELDS.forEach(k=>row[k]=num(d[k]));
+  if(d.plano!==undefined&&d.plano!==null&&d.plano!=='')row.plano=num(d.plano);
+  const i=rows.findIndex(r=>r.sku===d.sku); if(i>=0)rows[i]=row; else rows.push(row); render();
+  if(!sb){ setStatus('⚠️ Sem conexão — edição não salva.'); return; }
+  const {error}=await sb.from(TBL).upsert({sku:row.sku,data:row,updated_at:new Date().toISOString(),updated_by:userName||null},{onConflict:'sku'});
+  if(error)setStatus('⚠️ NÃO salvou '+row.sku+': '+error.message);
+  else setStatus('✅ '+row.sku+' salvo'+(userName?(' por '+userName):'')+' · '+hora());
+}
+async function removeRow(sku){ rows=rows.filter(r=>r.sku!==sku); render();
+  if(sb){ const {error}=await sb.from(TBL).delete().eq('sku',sku); if(error)setStatus('⚠️ Não removeu '+sku+': '+error.message); else setStatus('🗑️ '+sku+' removido · '+hora()); } }
+async function resetAll(){ if(!confirm('Restaurar TODOS os SKUs aos números originais? Isso sobrescreve as edições da equipe.'))return;
+  rows=SEED.map(d=>({...d})); render();
+  if(sb){ const payload=SEED.map(d=>({sku:d.sku,data:d,updated_at:new Date().toISOString(),updated_by:(userName||'reset')})); 
+    const {error}=await sb.from(TBL).upsert(payload,{onConflict:'sku'}); if(error)setStatus('⚠️ Erro ao restaurar: '+error.message); else setStatus('↩️ Dados originais restaurados · '+hora()); await loadAll(); render(); } }
+
+/* ---- derived ---- */
+function behLabel(r){
+  const a=num(r.v_set),b=num(r.v_out);
+  if(a===0&&b>0)return{cls:'new',txt:'Lançamento',d:null};
+  if(a===0)return{cls:'flat',txt:'—',d:null};
+  const d=b/a-1;
+  if(d>=0.3)return{cls:'up',txt:'Subindo forte '+pfmt(d),d};
+  if(d>=0.1)return{cls:'up',txt:'Subindo '+pfmt(d),d};
+  if(d<=-0.3)return{cls:'down',txt:'Caindo forte '+pfmt(d),d};
+  if(d<=-0.1)return{cls:'down',txt:'Caindo '+pfmt(d),d};
+  return{cls:'flat',txt:'Estável',d};
+}
+function enrich(){ return rows.map(r=>{
+  const disp=num(r.estoque)+num(r.chega_out)+num(r.chega_dez);
+  const dem=num(r.demanda); const faltaFev=Math.max(0,dem-disp);
+  const fat=num(r.preco)*dem; const b=behLabel(r);
+  const prodTot=num(r.necout)+num(r.necnov)+num(r.necdez)+num(r.necjan)+num(r.necfev);
+  const w_out=num(r.necout), w_nov=num(r.necnov), w_dez=num(r.necdez), w_jan=num(r.necjan), w_dezjan=w_dez+w_jan, w_fev=num(r.necfev);
+  const programado=(r.plano!==undefined&&r.plano!==null&&r.plano!=='')?num(r.plano):((COMPRAS[r.sku]&&COMPRAS[r.sku].plano)||0);
+  const faltaComprar=Math.max(0,prodTot-programado);
+  let sit='',txt='—';
+  if(dem>0){ if(faltaFev>0){sit='bad';txt='Falta '+fmt(faltaFev);} else if(disp<dem*1.1){sit='warn';txt='Apertado';} else {sit='ok';txt='Coberto';} }
+  return {...r,disp,faltaFev,fat,prodTot,w_out,w_nov,w_dez,w_jan,w_dezjan,w_fev,programado,faltaComprar,beh:b,sit,txt}; }); }
+
+/* ---- render ---- */
+function render(){
+  const data=enrich();
+  const sum=k=>d3.sum(data,d=>num(d[k]));
+  document.getElementById('t-est').textContent=cfmt.format(sum('estoque'));
+  document.getElementById('t-out').textContent=cfmt.format(sum('chega_out'));
+  document.getElementById('t-dez').textContent=cfmt.format(sum('chega_dez'));
+  document.getElementById('t-dem').textContent=cfmt.format(sum('demanda'));
+  document.getElementById('t-fat').textContent=brl(d3.sum(data,r=>r.fat));
+  document.getElementById('t-falta').textContent=cfmt.format(d3.sum(data,r=>r.faltaFev));
+  document.getElementById('t-risco').textContent=data.filter(r=>r.faltaFev>0).length;
+  document.getElementById('t-nec').textContent=cfmt.format(sum('necessidade'));
+  document.getElementById('sku-list').innerHTML=data.map(d=>`<option value="${d.sku}">`).join('');
+  if(tab==='geral')drawRisk(data);
+  if(tab==='vendas'){drawVendas(data);drawFat(data);}
+  if(tab==='estoque')drawChart(data);
+  if(tab==='producao')drawProd(data);
+  if(tab==='compras')drawCompras(data);
+  if(tab==='tabela')drawTable(data);
+}
+
+/* ---- visão geral: risk list ---- */
+function drawRisk(data){
+  const fb=document.getElementById('geral-filter');
+  if(!fb.dataset.built){ fb.dataset.built=1;
+    [['all','Todos'],['risk','Em risco'],['A','Curva A'],['up','Subindo'],['new','Lançamentos']].forEach(([k,t])=>{
+      const c=document.createElement('span'); c.className='chip'+(k==='all'?' on':''); c.textContent=t; c.dataset.k=k;
+      c.onclick=()=>{gfilter=k; fb.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x.dataset.k===k)); render();}; fb.appendChild(c);
+    });
+  }
+  let d=data.slice();
+  if(gfilter==='risk')d=d.filter(r=>r.faltaFev>0);
+  else if(gfilter==='A')d=d.filter(r=>r.curva==='A');
+  else if(gfilter==='up')d=d.filter(r=>r.beh.cls==='up');
+  else if(gfilter==='new')d=d.filter(r=>r.beh.cls==='new');
+  d.sort((a,b)=>b.faltaFev-a.faltaFev || b.fat-a.fat);
+  d=d.slice(0,30);
+  const mx=d3.max(data,r=>Math.max(r.disp,r.demanda))||1;
+  const wrap=document.getElementById('risklist'); wrap.innerHTML='';
+  if(!d.length){wrap.innerHTML='<p class="muted">Nenhum SKU neste filtro.</p>';return;}
+  for(const r of d){
+    const dispPct=100*r.disp/mx, demPct=100*r.demanda/mx;
+    const col=r.sit==='bad'?'var(--bad)':r.sit==='warn'?'var(--warn)':'var(--ok)';
+    const el=document.createElement('div'); el.style.cssText='border-bottom:1px solid var(--line);padding:9px 0';
+    el.innerHTML=`<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <div><b>${r.produto||r.sku}</b> <span class="muted" style="font-size:11.5px">· ${r.sku} · curva ${r.curva}</span></div>
+        <div style="text-align:right"><span class="pill ${r.sit}">${r.txt}</span></div></div>
+      <div style="position:relative;height:16px;margin-top:6px;background:var(--hl);border-radius:4px;overflow:hidden">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${Math.min(100,dispPct)}%;background:${col};opacity:.45"></div>
+        <div style="position:absolute;left:${Math.min(100,demPct)}%;top:-2px;height:20px;width:2px;background:var(--fg)"></div>
+      </div>
+      <div class="mrow"><span>disponível <b>${fmt(r.disp)}</b></span><span>venda esp. <b>${fmt(num(r.demanda))}</b></span>${r.faltaFev>0?`<span style="color:var(--bad)">faltam <b>${fmt(r.faltaFev)}</b></span>`:''}<span>faturam. <b>${brl(r.fat)}</b></span><span class="beh ${r.beh.cls}">${r.beh.txt}</span></div>`;
+    wrap.appendChild(el);
+  }
+}
+
+/* ---- vendas table ---- */
+function sparkHTML(r){
+  const vals=MESES.map(([k])=>num(r[k])); const mx=Math.max(...vals,1);
+  return '<span class="spark">'+MESES.map(([k,lab,fc],i)=>{const h=Math.max(2,Math.round(24*vals[i]/mx));return `<i class="${fc?'fc':''}" style="height:${h}px" title="${lab}: ${fmt(vals[i])}"></i>`;}).join('')+'</span>';
+}
+function drawVendas(data){
+  let d=data.filter(r=>!buscaV||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaV));
+  d.sort((a,b)=>{let av,bv; if(sortKeyV==='fat'){av=a.fat;bv=b.fat;} else if(sortKeyV==='beh'){av=a.beh.d??-9;bv=b.beh.d??-9;} else {av=a[sortKeyV];bv=b[sortKeyV];}
+    const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscV?c:-c;});
+  const tb=document.querySelector('#tv tbody'); tb.innerHTML='';
+  for(const r of d){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="l">${r.produto||r.sku}<div class="muted" style="font-size:11px">${r.sku}</div></td>
+      <td>${r.curva}</td>
+      <td class="l">${sparkHTML(r)}</td>
+      <td>${fmt(num(r.v_ago))}</td><td>${fmt(num(r.v_set))}</td><td style="font-weight:600">${fmt(num(r.v_out))}</td>
+      <td style="color:var(--out)">${fmt(num(r.d_nov))}</td><td style="color:var(--out)">${fmt(num(r.d_dez))}</td><td style="color:var(--out)">${fmt(num(r.d_jan))}</td><td style="color:var(--out)">${fmt(num(r.d_fev))}</td>
+      <td style="font-weight:600">${fmt(num(r.demanda))}</td>
+      <td>${num(r.preco).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td>
+      <td style="color:var(--fat);font-weight:600">${brl(r.fat)}</td>
+      <td class="l"><span class="beh ${r.beh.cls}">${r.beh.txt}</span></td>`;
+    tb.appendChild(tr);
+  }
+  document.getElementById('cnt-v').textContent=`${d.length} SKUs`;
+}
+function drawFat(data){
+  const box=document.getElementById('chart-fat'); box.innerHTML='';
+  const months=[['d_out','Out'],['d_nov','Nov'],['d_dez','Dez'],['d_jan','Jan'],['d_fev','Fev']];
+  const vals=months.map(([k,lab])=>({lab,v:d3.sum(data,r=>num(r[k])*num(r.preco))}));
+  const W2=Math.max(box.clientWidth,320),H=220,m={t:16,r:14,b:36,l:14};
+  const svg=d3.select(box).append('svg').attr('width','100%').attr('viewBox',`0 0 ${W2} ${H}`).style('min-width','320px');
+  const x=d3.scaleBand(vals.map(d=>d.lab),[m.l,W2-m.r]).padding(0.28);
+  const y=d3.scaleLinear([0,d3.max(vals,d=>d.v)*1.12||1],[H-m.b,m.t]);
+  const css=getComputedStyle(document.documentElement);
+  svg.selectAll('rect').data(vals).join('rect').attr('x',d=>x(d.lab)).attr('width',x.bandwidth())
+    .attr('y',d=>y(d.v)).attr('height',d=>y(0)-y(d.v)).attr('rx',4)
+    .attr('fill',d=>d.lab==='Nov'?css.getPropertyValue('--out').trim():css.getPropertyValue('--fat').trim());
+  svg.selectAll('text.v').data(vals).join('text').attr('class','v').attr('x',d=>x(d.lab)+x.bandwidth()/2).attr('y',d=>y(d.v)-5).attr('text-anchor','middle').attr('font-size',12).attr('fill','var(--fg)').attr('font-weight',600).text(d=>brl(d.v));
+  svg.selectAll('text.l').data(vals).join('text').attr('class','l').attr('x',d=>x(d.lab)+x.bandwidth()/2).attr('y',H-14).attr('text-anchor','middle').attr('font-size',12).attr('fill','var(--muted)').text(d=>d.lab);
+}
+
+/* ---- estoque chart (stacked) ---- */
+const COLS=['estoque','chega_out','chega_dez','necessidade'];
+const CVAR={estoque:'--est',chega_out:'--out',chega_dez:'--dez',necessidade:'--nec'};
+const CNAME={estoque:'Estoque',chega_out:'Chega até 30/10',chega_dez:'Programado nov/dez',necessidade:'Necessidade'};
+function drawChart(data){
+  const box=document.getElementById('chart'); box.innerHTML='';
+  const N=Math.max(5,Math.min(67,num(document.getElementById('chart-n').value)||22));
+  const d=data.slice().sort((a,b)=>(num(b.estoque)+num(b.chega_out)+num(b.chega_dez)+num(b.necessidade))-(num(a.estoque)+num(a.chega_out)+num(a.chega_dez)+num(a.necessidade))).slice(0,N);
+  const W2=Math.max(box.clientWidth,320),rowH=30,m={t:8,r:66,b:8,l:10},H=m.t+m.b+d.length*rowH;
+  const css=getComputedStyle(document.documentElement),color=k=>css.getPropertyValue(CVAR[k]).trim();
+  const svg=d3.select(box).append('svg').attr('width','100%').attr('viewBox',`0 0 ${W2} ${H}`).style('min-width','320px');
+  const tot=x=>num(x.estoque)+num(x.chega_out)+num(x.chega_dez)+num(x.necessidade);
+  const tmp=svg.append('g'),lab=tmp.selectAll('text').data(d).join('text').text(x=>x.sku).attr('font-size',12.5);let lw=0;lab.each(function(){lw=Math.max(lw,this.getComputedTextLength())});tmp.remove();
+  m.l=Math.min(lw+10,W2*0.4);
+  const x=d3.scaleLinear([0,d3.max(d,tot)*1.02||1],[m.l,W2-m.r]),y=d3.scaleBand(d.map(x=>x.sku),[m.t,H-m.b]).padding(0.28);
+  box.style.position='relative';
+  const tip=d3.select(box).append('div').style('position','absolute').style('pointer-events','none').style('background','var(--panel)').style('border','1px solid var(--line)').style('border-radius','8px').style('box-shadow','0 4px 14px rgba(0,0,0,.18)').style('padding','8px 10px').style('font-size','12.5px').style('display','none').style('z-index',5);
+  d.forEach(row=>{ let acc=0; COLS.forEach(k=>{ const v=num(row[k]); if(v<=0)return;
+    svg.append('rect').attr('x',x(acc)).attr('width',Math.max(0,x(acc+v)-x(acc))).attr('y',y(row.sku)).attr('height',y.bandwidth()).attr('fill',color(k)).attr('rx',3)
+      .on('mousemove',ev=>{const r=box.getBoundingClientRect();tip.style('display','block').style('left',Math.min(ev.clientX-r.left+12,W2-190)+'px').style('top',(ev.clientY-r.top-10)+'px').html(`<b>${row.sku}</b><br>${CNAME[k]}: ${fmt(v)}`);})
+      .on('mouseleave',()=>tip.style('display','none')); acc+=v; });
+    svg.append('text').text(row.sku).attr('x',m.l-8).attr('y',y(row.sku)+y.bandwidth()/2+4).attr('text-anchor','end').attr('font-size',12.5).attr('fill','var(--fg)').each(function(){let s=row.sku;while(this.getComputedTextLength()>m.l-10&&s.length>3){s=s.slice(0,-1);d3.select(this).text(s+'…');}});
+    svg.append('text').text(cfmt.format(acc)).attr('x',x(acc)+5).attr('y',y(row.sku)+y.bandwidth()/2+4).attr('font-size',12).attr('fill','var(--muted)');
+  });
+}
+
+/* ---- calendário de produção ---- */
+const PMES=[['necout','Out (rest.)'],['necnov','Nov'],['necdez','Dez'],['necjan','Jan'],['necfev','Fev']];
+function distHTML(r){
+  const vals=PMES.map(([k])=>num(r[k])); const mx=Math.max(...vals,1); const tot=d3.sum(vals);
+  if(tot===0)return '<span class="muted" style="font-size:11.5px">sem produção no período</span>';
+  return '<span class="spark" style="height:24px">'+PMES.map(([k,lab],i)=>{const h=Math.max(2,Math.round(22*vals[i]/mx));return `<i class="${lab==='Nov'?'fc':''}" style="height:${h}px" title="${lab}: ${fmt(vals[i])}"></i>`;}).join('')+'</span>';
+}
+function drawProd(data){
+  // tiles: total por mês
+  const tiles=document.getElementById('prod-tiles');
+  const tot=k=>d3.sum(data,r=>num(r[k]));
+  const grand=tot('necout')+tot('necnov')+tot('necdez')+tot('necjan')+tot('necfev');
+  const defs=[['necout','Out (rest.)','var(--est)'],['necnov','Novembro','var(--out)'],['necdez','Dezembro','var(--dez)'],['necjan','Janeiro','var(--est)'],['necfev','Fevereiro','var(--est)']];
+  tiles.innerHTML=defs.map(([k,lab,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">Produzir ${lab}</div><div class="big">${cfmt.format(tot(k))}</div><div class="s">un · +20% seg.</div></div>`).join('')+
+    `<div class="tile" style="--tc:var(--fat)"><div class="lbl">Total Out–Fev</div><div class="big">${cfmt.format(grand)}</div><div class="s">a produzir/comprar</div></div>`;
+  // tabela
+  let d=data.filter(r=>!buscaP||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaP));
+  if(prodFilter==='prod')d=d.filter(r=>r.prodTot>0);
+  else if(prodFilter==='A')d=d.filter(r=>r.curva==='A');
+  d.sort((a,b)=>{let av=a[sortKeyP],bv=b[sortKeyP]; const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscP?c:-c;});
+  const tb=document.querySelector('#tp tbody'); tb.innerHTML='';
+  for(const r of d){
+    const tr=document.createElement('tr');
+    const tdP=document.createElement('td');tdP.className='l';tdP.innerHTML=`${r.produto||r.sku}<div class="muted" style="font-size:11px">${r.sku}</div>`;tr.appendChild(tdP);
+    const tdC=document.createElement('td');tdC.textContent=r.curva||'-';tr.appendChild(tdC);
+    PMES.forEach(([k,lab])=>{ const td=document.createElement('td'); td.className='edit-cell'; const v=num(r[k]); td.textContent=v?fmt(v):'—'; if(v&&lab==='Nov')td.style.color='var(--out)'; if(!v)td.style.color='var(--muted)'; td.onclick=()=>startProdCell(td,r,k); tr.appendChild(td); });
+    const tdT=document.createElement('td');tdT.textContent=fmt(r.prodTot);tdT.style.fontWeight='600';tr.appendChild(tdT);
+    const tdD=document.createElement('td');tdD.className='l';tdD.innerHTML=distHTML(r);tr.appendChild(tdD);
+    tb.appendChild(tr);
+  }
+  document.getElementById('cnt-p').textContent=`${d.length} SKUs`;
+}
+function startProdCell(td,r,k){
+  if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
+  const inp=document.createElement('input'); inp.type='number'; inp.min=0; inp.step=1; inp.value=num(r[k]);
+  td.appendChild(inp); inp.focus(); inp.select();
+  const done=sv=>{ cellEdit=null; if(sv){ const nv=num(inp.value); const upd={...r,[k]:nv};
+      upd.necessidade=num(upd.necout)+num(upd.necnov)+num(upd.necdez)+num(upd.necjan)+num(upd.necfev);
+      saveRow(upd); } else render(); };
+  inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
+}
+
+/* ---- calendário de compras ---- */
+function drawCompras(data){
+  const tiles=document.getElementById('compras-tiles');
+  const sw=k=>d3.sum(data,r=>num(r[k]));
+  const wins=[
+    ['Out (em curso)','entrega outubro',sw('w_out'),'var(--est)'],
+    ['Novembro · até 31/10','entrega novembro (Black)',sw('w_nov'),'var(--out)'],
+    ['Dezembro · até 30/11','entrega dezembro',sw('w_dez'),'var(--dez)'],
+    ['Janeiro · até 30/11','entrega janeiro',sw('w_jan'),'var(--dez)'],
+    ['Fevereiro · ≥ 20/01','entrega fevereiro',sw('w_fev'),'var(--est)']
+  ];
+  tiles.innerHTML=wins.map(([lab,sub,v,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">${lab}</div><div class="big">${cfmt.format(v)}</div><div class="s">${sub}</div></div>`).join('')+
+    `<div class="tile" style="--tc:var(--fat)"><div class="lbl">Falta comprar (total)</div><div class="big">${cfmt.format(d3.sum(data,r=>r.faltaComprar))}</div><div class="s">além do já programado</div></div>`;
+  let d=data.filter(r=>!buscaC||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaC));
+  if(comprasFilter==='comprar')d=d.filter(r=>r.faltaComprar>0);
+  else if(comprasFilter==='prod')d=d.filter(r=>r.prodTot>0);
+  else if(comprasFilter==='A')d=d.filter(r=>r.curva==='A');
+  d.sort((a,b)=>{let av=a[sortKeyC],bv=b[sortKeyC]; const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscC?c:-c;});
+  const tb=document.querySelector('#tc tbody'); tb.innerHTML='';
+  for(const r of d){
+    const tr=document.createElement('tr');
+    const tdP=document.createElement('td');tdP.className='l';tdP.innerHTML=`${r.produto||r.sku}<div class="muted" style="font-size:11px">${r.sku}</div>`;tr.appendChild(tdP);
+    const tdC=document.createElement('td');tdC.textContent=r.curva||'-';tr.appendChild(tdC);
+    [['w_out',''],['w_nov','var(--out)'],['w_dez',''],['w_jan',''],['w_fev','']].forEach(([k,col])=>{const td=document.createElement('td');const v=num(r[k]);td.textContent=v?fmt(v):'—';if(v&&col)td.style.color=col;if(!v)td.style.color='var(--muted)';tr.appendChild(td);});
+    const tdT=document.createElement('td');tdT.textContent=fmt(r.prodTot);tdT.style.fontWeight='600';tr.appendChild(tdT);
+    const tdPr=document.createElement('td');tdPr.className='edit-cell';tdPr.textContent=fmt(r.programado);tdPr.onclick=()=>startComprasCell(tdPr,r);tr.appendChild(tdPr);
+    const tdF=document.createElement('td');tdF.textContent=r.faltaComprar>0?fmt(r.faltaComprar):'0';tdF.style.color=r.faltaComprar>0?'var(--bad)':'var(--muted)';tdF.style.fontWeight=r.faltaComprar>0?'600':'400';tr.appendChild(tdF);
+    const tdS=document.createElement('td');
+    let scls='ok',stxt='Coberto';
+    if(r.prodTot===0){scls='';stxt='—';}
+    else if(r.faltaComprar>0){scls='bad';stxt='Comprar';}
+    else if(r.programado>r.prodTot*2){scls='warn';stxt='Pode adiar';}
+    tdS.innerHTML=scls?`<span class="pill ${scls}">${stxt}</span>`:'<span class="muted">—</span>';tr.appendChild(tdS);
+    tb.appendChild(tr);
+  }
+  document.getElementById('cnt-c').textContent=`${d.length} SKUs`;
+}
+function startComprasCell(td,r){
+  if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
+  const inp=document.createElement('input'); inp.type='number'; inp.min=0; inp.step=1; inp.value=num(r.programado);
+  td.appendChild(inp); inp.focus(); inp.select();
+  const done=sv=>{ cellEdit=null; if(sv){ saveRow({...r,plano:num(inp.value)}); } else render(); };
+  inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
+}
+
+/* ---- tabela ---- */
+function drawTable(data){
+  let d=data.filter(r=>!busca||(r.sku+' '+(r.produto||'')).toLowerCase().includes(busca));
+  d.sort((a,b)=>{let av=a[sortKey],bv=b[sortKey]; const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAsc?c:-c;});
+  const tb=document.querySelector('#tb tbody'); tb.innerHTML='';
+  for(const r of d){
+    const tr=document.createElement('tr');
+    const tdSku=document.createElement('td');tdSku.className='l';tdSku.textContent=r.sku;tr.appendChild(tdSku);
+    const tdP=document.createElement('td');tdP.className='l';tdP.textContent=r.produto||'';tr.appendChild(tdP);
+    const tdC=document.createElement('td');tdC.textContent=r.curva||'-';tr.appendChild(tdC);
+    ['estoque','chega_out','chega_dez','necessidade','demanda'].forEach(k=>{ const td=document.createElement('td'); td.className='edit-cell'; td.textContent=fmt(num(r[k])); td.onclick=()=>startCell(td,r,k); tr.appendChild(td); });
+    const tdPr=document.createElement('td');tdPr.className='edit-cell';tdPr.textContent=num(r.preco).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});tdPr.onclick=()=>startCell(tdPr,r,'preco',false,true);tr.appendChild(tdPr);
+    const tdD=document.createElement('td');tdD.textContent=fmt(num(r.disp));tdD.style.color='var(--fat)';tr.appendChild(tdD);
+    const tdF=document.createElement('td');tdF.textContent=r.faltaFev>0?fmt(r.faltaFev):'0';tdF.style.color=r.faltaFev>0?'var(--bad)':'var(--muted)';tr.appendChild(tdF);
+    const tdS=document.createElement('td');tdS.innerHTML=r.sit?`<span class="pill ${r.sit}">${r.txt}</span>`:'<span class="muted">—</span>';tr.appendChild(tdS);
+    const tdN=document.createElement('td');tdN.className='l edit-cell txt';tdN.textContent=r.nota||'—';tdN.style.color=r.nota?'':'var(--muted)';tdN.onclick=()=>startCell(tdN,r,'nota',true);tr.appendChild(tdN);
+    const tdA=document.createElement('td');tdA.className='l';
+    const e=document.createElement('button');e.className='mini';e.textContent='Editar';e.onclick=()=>openEdit(r);
+    const x=document.createElement('button');x.className='mini danger';x.textContent='Remover';x.style.marginLeft='5px';x.onclick=()=>{if(confirm('Remover '+r.sku+'?'))removeRow(r.sku);};
+    tdA.append(e,x);tr.appendChild(tdA); tb.appendChild(tr);
+  }
+  document.getElementById('cnt').textContent=`${d.length} SKUs`;
+}
+function startCell(td,r,k,isText,isDec){
+  if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
+  const inp=document.createElement('input'); inp.type=isText?'text':'number'; if(!isText){inp.min=0;inp.step=isDec?0.01:1;} inp.value=isText?(r[k]||''):num(r[k]);
+  td.appendChild(inp); inp.focus(); inp.select();
+  const done=sv=>{ cellEdit=null; if(sv){ const nv=isText?inp.value:num(inp.value); saveRow({...r,[k]:nv}); } else render(); };
+  inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
+}
+function openEdit(r){
+  const prod=prompt('Produto:',r.produto||r.sku); if(prod===null)return;
+  const cur=prompt('Curva (A/B/C):',r.curva||'C'); if(cur===null)return;
+  saveRow({...r,produto:prod,curva:(cur||'C').toUpperCase().slice(0,1)});
+}
+
+/* ---- CSV update ---- */
+document.getElementById('btn-csv').onclick=async()=>{
+  const files=document.getElementById('f-csv').files; if(!files.length){document.getElementById('csv-msg').textContent='Selecione o(s) CSV do WMS.';return;}
+  const addNew=document.getElementById('csv-add').checked;
+  const saldo={}; let lidas=0;
+  for(const f of files){
+    const txt=await f.text(); const lines=txt.split(/\r?\n/);
+    let hi=lines.findIndex(l=>l.replace(/^\uFEFF/,'').startsWith('ID;SKU')); if(hi<0)continue;
+    const head=lines[hi].replace(/^\uFEFF/,'').split(';').map(s=>s.replace(/^"|"$/g,'').trim());
+    const iSku=head.indexOf('SKU'), iSal=head.indexOf('SALDO');
+    for(let j=hi+1;j<lines.length;j++){ const ln=lines[j]; if(!ln.trim())continue;
+      const c=ln.match(/("([^"]|"")*"|[^;]*)(;|$)/g).map(x=>x.replace(/;$/,'').replace(/^"|"$/g,'').trim());
+      const sku=(c[iSku]||'').trim(); if(!sku)continue;
+      const s=parseInt((c[iSal]||'0').replace(/\./g,'').replace(',','.'))||0; saldo[sku]=(saldo[sku]||0)+s; lidas++;
+    }
+  }
+  let upd=0,crd=0;
+  for(const r of rows){ if(saldo[r.sku]!==undefined){ saveRow({...r,estoque:saldo[r.sku]}); upd++; delete saldo[r.sku]; } }
+  if(addNew){ for(const sku in saldo){ saveRow({sku,produto:sku,curva:'C',cls:'',estoque:saldo[sku],chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); crd++; } }
+  document.getElementById('csv-msg').textContent=`${lidas} linhas lidas · ${upd} SKUs atualizados${crd?` · ${crd} novos`:''}.`;
+  const h=document.getElementById('csv-hist'); h.textContent='Última atualização de estoque: '+new Date().toLocaleString('pt-BR');
+  document.getElementById('f-csv').value='';
+};
+
+/* ---- lançar chegada / baixa ---- */
+document.getElementById('f-data').value=todayISO;
+document.getElementById('f-add').onclick=()=>{
+  const sku=document.getElementById('f-sku').value.trim(), qtd=num(document.getElementById('f-qtd').value);
+  const tipo=document.getElementById('f-tipo').value, data=document.getElementById('f-data').value;
+  const baixa=document.getElementById('f-baixa').checked;
+  if(!sku){setStatus('Informe o SKU.');return;} if(qtd<=0){setStatus('Informe a quantidade.');return;}
+  const ex=rows.find(r=>r.sku.toLowerCase()===sku.toLowerCase())||{sku,produto:sku,curva:'C',cls:'',estoque:0,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0};
+  const r={...ex};
+  if(tipo==='estoque')r.estoque=num(r.estoque)+qtd;
+  else if(tipo==='necessidade')r.necessidade=qtd;
+  else{ if(data&&data<='2026-10-30')r.estoque=num(r.estoque)+qtd; else r.chega_dez=num(r.chega_dez)+qtd; }
+  if(baixa&&tipo!=='necessidade')r.necessidade=Math.max(0,num(r.necessidade)-qtd);
+  saveRow(r); document.getElementById('f-sku').value='';document.getElementById('f-qtd').value='';
+  setStatus(`Lançado em ${r.sku}${baixa&&tipo!=='necessidade'?' (baixa na necessidade)':''}.`);
+};
+document.getElementById('btn-add-blank').onclick=()=>{ const sku=prompt('Código do novo SKU:'); if(!sku)return;
+  saveRow({sku:sku.trim(),produto:sku.trim(),curva:'C',cls:'',estoque:0,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); busca=sku.toLowerCase(); document.getElementById('busca').value=sku; tab='tabela'; switchTab(); };
+
+/* ---- tabs/controls ---- */
+function switchTab(){ ['geral','vendas','estoque','producao','compras','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab)); render(); }
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
+document.querySelectorAll('#tb th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKey===k)sortAsc=!sortAsc;else{sortKey=k;sortAsc=['sku','produto','curva'].includes(k);}render();});
+document.querySelectorAll('#tv th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyV===k)sortAscV=!sortAscV;else{sortKeyV=k;sortAscV=['produto','curva'].includes(k);}render();});
+document.querySelectorAll('#tp th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyP===k)sortAscP=!sortAscP;else{sortKeyP=k;sortAscP=['produto','curva'].includes(k);}render();});
+document.getElementById('busca').oninput=e=>{busca=e.target.value.toLowerCase();render();};
+document.getElementById('busca-v').oninput=e=>{buscaV=e.target.value.toLowerCase();render();};
+document.getElementById('busca-p').oninput=e=>{buscaP=e.target.value.toLowerCase();render();};
+document.getElementById('prod-filter').onchange=e=>{prodFilter=e.target.value;render();};
+document.querySelectorAll('#tc th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyC===k)sortAscC=!sortAscC;else{sortKeyC=k;sortAscC=['produto','curva'].includes(k);}render();});
+document.getElementById('busca-c').oninput=e=>{buscaC=e.target.value.toLowerCase();render();};
+document.getElementById('compras-filter').onchange=e=>{comprasFilter=e.target.value;render();};
+document.getElementById('chart-n').oninput=()=>drawChart(enrich());
+document.getElementById('btn-reset').onclick=resetAll;
+const tbtn=document.getElementById('themebtn');
+tbtn.onclick=()=>{const cur=document.documentElement.getAttribute('data-theme');const mdark=matchMedia('(prefers-color-scheme: dark)').matches;const next=cur?(cur==='dark'?'light':'dark'):(mdark?'light':'dark');document.documentElement.setAttribute('data-theme',next);render();};
+
+boot();
+</script>
+</body>
+</html>
