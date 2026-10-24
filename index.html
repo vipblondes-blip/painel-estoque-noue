@@ -32,6 +32,8 @@
   .tabs{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap}
   .tabs button{border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:999px; padding:8px 17px; cursor:pointer; font:inherit}
   .tabs button.on{background:var(--est); border-color:var(--est); color:#fff; font-weight:600}
+  .tabs button.suplaunch{border-color:var(--fat); color:var(--fat); font-weight:600}
+  .tabs button.suplaunch:hover{background:color-mix(in srgb,var(--fat) 14%,transparent)}
   .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:11px; margin-bottom:16px}
   .tile{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 15px; border-top:4px solid var(--tc,var(--line))}
   .tile .lbl{font-size:12px; color:var(--muted)}
@@ -98,17 +100,21 @@
   <div id="status" class="status">Carregando…</div>
   <div id="ronote" class="ro-note" style="display:none">Modo leitura — as edições ficam com quem tem permissão de escrita.</div>
 
-  <div class="tabs">
+  <div class="tabs" id="mainnav">
     <button data-tab="geral" class="on">📊 Visão geral</button>
     <button data-tab="vendas">📈 Vendas 6 meses &amp; faturamento</button>
     <button data-tab="estoque">📦 Estoque &amp; chegadas</button>
     <button data-tab="producao">🏭 Calendário de produção</button>
     <button data-tab="compras">🛒 Calendário de compras</button>
+    <button data-tab="tabela">📋 Tabela editável</button>
+    <button id="open-sup" class="suplaunch">🔒 Área de Suprimentos / Insumos</button>
+  </div>
+  <div class="tabs" id="supnav" style="display:none">
+    <button id="back-painel" class="suplaunch">← Voltar ao painel de performance</button>
     <button data-tab="insumos">🧩 Insumos</button>
     <button data-tab="pagamentos">💰 Pagamentos previstos</button>
     <button data-tab="pedidos">🛒 Pedidos</button>
     <button data-tab="entregas">🚚 Entregas (fluxo)</button>
-    <button data-tab="tabela">📋 Tabela editável</button>
   </div>
 
   <!-- VISÃO GERAL -->
@@ -535,14 +541,20 @@ async function boot(){
   const uWrap=document.getElementById('userwrap');
   if(uWrap){ const inp=document.getElementById('username'); inp.value=userName;
     inp.oninput=()=>{ userName=inp.value.trim(); localStorage.setItem('noue_user',userName); }; }
-  const ok=await loadAll(); await loadPedidos();
+  const ok=await loadAll();
   if(ok){ ron.style.display='none'; setStatus('✅ Conectado ao banco da Nouê — tudo que você editar fica salvo e aparece ao vivo para a equipe · '+hora()); }
   render();
-  // Tempo real: qualquer alteração de qualquer pessoa recarrega o painel
+  // Tempo real do painel de performance
   try{
     sb.channel('painel_rt').on('postgres_changes',{event:'*',schema:'public',table:TBL},async()=>{ await loadAll(); setStatus('✅ Sincronizado com a equipe · '+hora()); render(); }).subscribe();
-    sb.channel('pedidos_rt').on('postgres_changes',{event:'*',schema:'public',table:TBLP},async()=>{ await loadPedidos(); render(); }).subscribe();
   }catch(e){}
+}
+// Pedidos (área restrita) só carregam após o desbloqueio
+let pedidosCarregados=false;
+async function carregarPedidosSeg(){
+  if(pedidosCarregados||!sb)return; pedidosCarregados=true;
+  await loadPedidos(); render();
+  try{ sb.channel('pedidos_rt').on('postgres_changes',{event:'*',schema:'public',table:TBLP},async()=>{ await loadPedidos(); render(); }).subscribe(); }catch(e){}
 }
 async function saveRow(d){
   const row=strip({sku:d.sku,produto:d.produto||d.sku,curva:d.curva||'C',cls:d.cls||'',nota:d.nota||''});
@@ -557,7 +569,8 @@ async function saveRow(d){
 }
 async function removeRow(sku){ rows=rows.filter(r=>r.sku!==sku); render();
   if(sb){ const {error}=await sb.from(TBL).delete().eq('sku',sku); if(error)setStatus('⚠️ Não removeu '+sku+': '+error.message); else setStatus('🗑️ '+sku+' removido · '+hora()); } }
-async function resetAll(){ if(!confirm('Restaurar TODOS os SKUs aos números originais? Isso sobrescreve as edições da equipe.'))return;
+async function resetAll(){ const p=prompt('Ação restrita. Digite a senha para restaurar os dados originais:'); if(p===null)return; if(p!==SUP_PW){alert('Senha incorreta.');return;}
+  if(!confirm('Restaurar TODOS os SKUs aos números originais? Isso sobrescreve as edições da equipe.'))return;
   rows=SEED.map(d=>({...d})); render();
   if(sb){ const payload=SEED.map(d=>({sku:d.sku,data:d,updated_at:new Date().toISOString(),updated_by:(userName||'reset')})); 
     const {error}=await sb.from(TBL).upsert(payload,{onConflict:'sku'}); if(error)setStatus('⚠️ Erro ao restaurar: '+error.message); else setStatus('↩️ Dados originais restaurados · '+hora()); await loadAll(); render(); } }
@@ -1107,7 +1120,22 @@ document.getElementById('btn-add-blank').onclick=()=>{ const sku=prompt('Código
 /* ---- tabs/controls ---- */
 function switchTab(){ ['geral','vendas','estoque','producao','compras','insumos','pagamentos','pedidos','entregas','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab)); render(); }
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
+document.querySelectorAll('.tabs button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
+/* ---- área restrita de suprimentos (senha) ---- */
+const SUP_PW='Noue@7212'; let supUnlocked=false;
+function abrirSuprimentos(){
+  if(!supUnlocked){ const p=prompt('Área restrita de Suprimentos. Digite a senha:'); if(p===null)return; if(p!==SUP_PW){alert('Senha incorreta.');return;} supUnlocked=true; carregarPedidosSeg(); }
+  document.getElementById('mainnav').style.display='none';
+  document.getElementById('supnav').style.display='flex';
+  tab='insumos'; switchTab();
+}
+function voltarPainel(){
+  document.getElementById('supnav').style.display='none';
+  document.getElementById('mainnav').style.display='flex';
+  tab='geral'; switchTab();
+}
+document.getElementById('open-sup').onclick=abrirSuprimentos;
+document.getElementById('back-painel').onclick=voltarPainel;
 document.querySelectorAll('#tb th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKey===k)sortAsc=!sortAsc;else{sortKey=k;sortAsc=['sku','produto','curva'].includes(k);}render();});
 document.querySelectorAll('#tv th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyV===k)sortAscV=!sortAscV;else{sortKeyV=k;sortAscV=['produto','curva'].includes(k);}render();});
 document.querySelectorAll('#tp th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyP===k)sortAscP=!sortAscP;else{sortKeyP=k;sortAscP=['produto','curva'].includes(k);}render();});
