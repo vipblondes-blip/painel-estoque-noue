@@ -167,16 +167,37 @@
 
   <!-- ESTOQUE -->
   <section id="tab-estoque" style="display:none">
+    <div class="tiles">
+      <div class="tile" style="--tc:var(--est)"><div class="lbl">Estoque total</div><div class="big" id="te-tot">—</div><div class="s">Guarulhos + Extrema</div></div>
+      <div class="tile" style="--tc:var(--out)"><div class="lbl">Guarulhos (SP · B2B)</div><div class="big" id="te-gru">—</div><div class="s">CD TPL Guarulhos</div></div>
+      <div class="tile" style="--tc:var(--dez)"><div class="lbl">Extrema (MG · B2C)</div><div class="big" id="te-ext">—</div><div class="s">CD TPL Extrema</div></div>
+    </div>
     <div class="card" style="border:2px solid var(--est)">
-      <h2>📤 Atualizar estoque do dia (CSV do WMS)</h2>
-      <p class="note">Suba o(s) arquivo(s) <b>produtos-…csv</b> exportados do WMS da TPL (SP e MG). O painel soma o <b>SALDO</b> por SKU e substitui a coluna “Estoque atual”. Chegadas, venda esperada e necessidade não mudam — isso você ajusta à mão.</p>
-      <div class="tools">
-        <input type="file" id="f-csv" accept=".csv,text/csv" multiple>
+      <h2>📤 Atualizar estoque do dia — uma planilha por CD</h2>
+      <p class="note">Você exporta duas planilhas do WMS: uma de <b>Guarulhos (SP)</b> e uma de <b>Extrema (MG)</b>. Selecione cada arquivo no seu campo e clique em atualizar. O painel lê o <b>SALDO</b> por SKU, grava cada CD na sua coluna e o <b>total</b> passa a ser a soma dos dois. Chegadas, venda e necessidade não mudam.</p>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr auto;align-items:end">
+        <label>Planilha Guarulhos (SP)<input type="file" id="f-csv-gru" accept=".csv,text/csv"></label>
+        <label>Planilha Extrema (MG)<input type="file" id="f-csv-ext" accept=".csv,text/csv"></label>
         <button class="primary" id="btn-csv">Atualizar estoque</button>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="csv-add" checked style="width:auto"> criar SKUs novos que aparecerem no CSV</label>
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:10px"><input type="checkbox" id="csv-add" checked style="width:auto"> criar SKUs novos que aparecerem nas planilhas</label>
       <div id="csv-msg" class="hint"></div>
       <div id="csv-hist" class="csv-hist"></div>
+    </div>
+    <div class="card">
+      <h2>Estoque por CD (Guarulhos × Extrema)</h2>
+      <p class="note">Total por produto e a divisão entre os dois armazéns. Clique em Guarulhos ou Extrema para ajustar à mão; o total recalcula sozinho.</p>
+      <div class="tools"><input id="busca-e" placeholder="Buscar SKU ou produto" style="min-width:220px"><span class="muted" id="cnt-e" style="font-size:12.5px"></span></div>
+      <div class="tbox">
+        <table id="te"><thead><tr>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th data-k="estoque">Total</th>
+          <th data-k="est_gru" style="color:var(--out)">Guarulhos (SP)</th>
+          <th data-k="est_ext" style="color:var(--dez)">Extrema (MG)</th>
+          <th data-k="chega_out">Chegadas</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
     </div>
     <div class="card">
       <h2>Registrar chegada / dar baixa na projeção</h2>
@@ -321,6 +342,7 @@ let rows=SEED.map(d=>({...d}));
 let tab='geral', sortKey='demanda', sortAsc=false, sortKeyV='fat', sortAscV=false, busca='', buscaV='', cellEdit=null, gfilter='all';
 let sortKeyP='prodTot', sortAscP=false, buscaP='', prodFilter='prod';
 let sortKeyC='faltaComprar', sortAscC=false, buscaC='', comprasFilter='comprar';
+let sortKeyE='estoque', sortAscE=false, buscaE='';
 const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"plano":22000,"status":"Plano acima do necessário"},"CAMUTOUCHECC":{"plano":11200,"status":"Bate"},"CAMUTOUCH":{"plano":10450,"status":"Bate"},"MELANOREATIV":{"plano":1200,"status":"ROMPE com o plano"},"COULEURSPEROLA140ML":{"plano":2000,"status":"ROMPE com o plano"},"CAMUTOUCHLE":{"plano":5950,"status":"Bate"},"CAMUTOUCHLC":{"plano":2650,"status":"Plano acima do necessário"},"Shampoocamuflage1litro":{"plano":0,"status":"Sem demanda"},"F9GTJD8XSP":{"plano":0,"status":"Sem demanda"},"OLEOREGENER30ML":{"plano":0,"status":"Sem demanda"},"SHAMPOOREGENER250ML":{"plano":0,"status":"Sem demanda"},"CAMUMEDI140ML":{"plano":300000,"status":"Bate"},"CAMUMEDI1L":{"plano":2300,"status":"Plano acima do necessário"},"10OXIGENADAOX900ML":{"plano":6000,"status":"Bate"},"NOVOSHAMPOOCAMUFLAGE1LITRO":{"plano":10000,"status":"Plano acima do necessário"},"NOVOSHAMPOONOUE140ML":{"plano":50000,"status":"ROMPE com o plano"},"CAMUCOOPER140ML":{"plano":5000,"status":"Bate"},"COULEURSCHOCOLAT140ML":{"plano":2500,"status":"Bate"},"CAMULIGHT140ML":{"plano":100000,"status":"Bate"},"COLGLOW60G":{"plano":25000,"status":"Plano acima do necessário"},"MASCARACAMU150G":{"plano":20000,"status":"Plano acima do necessário"},"SHAMPOOPRECAMU140ML":{"plano":25000,"status":"Plano acima do necessário"},"SPRAYREGENERNV200ML":{"plano":10000,"status":"Plano acima do necessário"},"COLGLOWINTENSE60G":{"plano":0,"status":"Bate"},"CAMULIGHT1L":{"plano":2000,"status":"Bate"},"OLEOREGENER30ML2":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSMANTEIGA140ML":{"plano":0,"status":"Bate"},"CAMUGRAY140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSAVELA140ML":{"plano":0,"status":"Bate"},"MASCARAREGENER250G":{"plano":4000,"status":"Plano acima do necessário"},"PERFUMERENEGER50ML":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSDOCE140ML":{"plano":0,"status":"Bate"},"CAMUSILVER140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSMEL140ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER250MLNOVO":{"plano":4000,"status":"Bate"},"KITRAPIDOGLOW":{"plano":0,"status":"Bate"},"COULEURSCANNELLE140ML":{"plano":2500,"status":"Bate"},"MASCARAREGENER500G":{"plano":1000,"status":"Bate"},"COULEURSCUIVRE140ML":{"plano":2500,"status":"Bate"},"MASCARAFORTIFYE500G":{"plano":1000,"status":"Bate"},"SERUMREGENERADOR":{"plano":2500,"status":"Plano acima do necessário"},"COULEURSPEROLA500ML":{"plano":0,"status":"Bate"},"CAMUPEARL1L":{"plano":0,"status":"Bate"},"PERFUMEFORTIFYE50ML":{"plano":0,"status":"Bate"},"COULEURSMANTEIGA500ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER1L":{"plano":500,"status":"Bate"},"OLEOFORTIFYE30ML":{"plano":0,"status":"Bate"},"GELFORTIFYE250ML":{"plano":1000,"status":"Bate"},"MASCARASILVERY500G":{"plano":0,"status":"Bate"},"LEAVEINFORTIFYE200ML":{"plano":0,"status":"Bate"},"COULEURSAVELA500ML":{"plano":0,"status":"Bate"},"MASCARAFORTIFYE250G":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE250ML":{"plano":1000,"status":"Bate"},"COULEURSDOCE500ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY250ML":{"plano":0,"status":"Bate"},"LUMIERE500G":{"plano":0,"status":"Bate"},"MASCARASILVERY300G":{"plano":0,"status":"Bate"},"COULEURSMEL500ML":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE1L":{"plano":0,"status":"Bate"},"10OXIGENADA120ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY1L":{"plano":0,"status":"Bate"},"20OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"GELFORTIFYE1L":{"plano":0,"status":"Bate"},"30OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"PROTEINE1L":{"plano":0,"status":"Bate"}};
 
 /* ---- persistência: Supabase (banco próprio da Nouê) ---- */
@@ -330,7 +352,7 @@ const TBL='painel_estoque';
 let sb=null, userName=localStorage.getItem('noue_user')||'';
 const setStatus=m=>document.getElementById('status').textContent=m;
 const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null)r[k]=o[k];return r;};
-const FIELDS=['estoque','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
+const FIELDS=['estoque','est_gru','est_ext','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
 const hora=()=>new Date().toLocaleTimeString('pt-BR').slice(0,5);
 
 async function loadAll(){
@@ -411,7 +433,7 @@ function render(){
   document.getElementById('sku-list').innerHTML=data.map(d=>`<option value="${d.sku}">`).join('');
   if(tab==='geral')drawRisk(data);
   if(tab==='vendas'){drawVendas(data);drawFat(data);}
-  if(tab==='estoque')drawChart(data);
+  if(tab==='estoque'){ drawEstoque(data); drawChart(data); }
   if(tab==='producao')drawProd(data);
   if(tab==='compras')drawCompras(data);
   if(tab==='tabela')drawTable(data);
@@ -491,6 +513,38 @@ function drawFat(data){
     .attr('fill',d=>d.lab==='Nov'?css.getPropertyValue('--out').trim():css.getPropertyValue('--fat').trim());
   svg.selectAll('text.v').data(vals).join('text').attr('class','v').attr('x',d=>x(d.lab)+x.bandwidth()/2).attr('y',d=>y(d.v)-5).attr('text-anchor','middle').attr('font-size',12).attr('fill','var(--fg)').attr('font-weight',600).text(d=>brl(d.v));
   svg.selectAll('text.l').data(vals).join('text').attr('class','l').attr('x',d=>x(d.lab)+x.bandwidth()/2).attr('y',H-14).attr('text-anchor','middle').attr('font-size',12).attr('fill','var(--muted)').text(d=>d.lab);
+}
+
+/* ---- estoque por CD (Guarulhos x Extrema) ---- */
+function drawEstoque(data){
+  const anySplit=data.some(r=>(r.est_gru!==undefined&&r.est_gru!==null&&r.est_gru!=='')||(r.est_ext!==undefined&&r.est_ext!==null&&r.est_ext!==''));
+  document.getElementById('te-tot').textContent=cfmt.format(d3.sum(data,r=>num(r.estoque)));
+  document.getElementById('te-gru').textContent=anySplit?cfmt.format(d3.sum(data,r=>num(r.est_gru))):'—';
+  document.getElementById('te-ext').textContent=anySplit?cfmt.format(d3.sum(data,r=>num(r.est_ext))):'—';
+  let d=data.filter(r=>!buscaE||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaE));
+  d.sort((a,b)=>{let av=a[sortKeyE],bv=b[sortKeyE]; const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscE?c:-c;});
+  const tb=document.querySelector('#te tbody'); tb.innerHTML='';
+  for(const r of d){
+    const tr=document.createElement('tr');
+    const tdP=document.createElement('td');tdP.className='l';tdP.innerHTML=`${r.produto||r.sku}<div class="muted" style="font-size:11px">${r.sku}</div>`;tr.appendChild(tdP);
+    const tdC=document.createElement('td');tdC.textContent=r.curva||'-';tr.appendChild(tdC);
+    const hasSplit=(r.est_gru!==undefined&&r.est_gru!==null&&r.est_gru!=='')||(r.est_ext!==undefined&&r.est_ext!==null&&r.est_ext!=='');
+    const tdT=document.createElement('td');tdT.textContent=fmt(num(r.estoque));tdT.style.fontWeight='600';tr.appendChild(tdT);
+    const tdG=document.createElement('td');tdG.className='edit-cell';tdG.textContent=hasSplit?fmt(num(r.est_gru)):'—';if(!hasSplit)tdG.style.color='var(--muted)';else tdG.style.color='var(--out)';tdG.onclick=()=>startEstoqueCell(tdG,r,'est_gru');tr.appendChild(tdG);
+    const tdE=document.createElement('td');tdE.className='edit-cell';tdE.textContent=hasSplit?fmt(num(r.est_ext)):'—';if(!hasSplit)tdE.style.color='var(--muted)';else tdE.style.color='var(--dez)';tdE.onclick=()=>startEstoqueCell(tdE,r,'est_ext');tr.appendChild(tdE);
+    const tdCh=document.createElement('td');tdCh.textContent=fmt(num(r.chega_out)+num(r.chega_dez));tdCh.style.color='var(--muted)';tr.appendChild(tdCh);
+    tb.appendChild(tr);
+  }
+  document.getElementById('cnt-e').textContent=`${d.length} SKUs`;
+}
+function startEstoqueCell(td,r,k){
+  if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
+  const inp=document.createElement('input'); inp.type='number'; inp.min=0; inp.step=1; inp.value=num(r[k]);
+  td.appendChild(inp); inp.focus(); inp.select();
+  const done=sv=>{ cellEdit=null; if(sv){ const upd={...r,[k]:num(inp.value)};
+      upd.estoque=num(upd.est_gru)+num(upd.est_ext); // total = Guarulhos + Extrema
+      saveRow(upd); } else render(); };
+  inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
 }
 
 /* ---- estoque chart (stacked) ---- */
@@ -643,27 +697,46 @@ function openEdit(r){
 }
 
 /* ---- CSV update ---- */
-document.getElementById('btn-csv').onclick=async()=>{
-  const files=document.getElementById('f-csv').files; if(!files.length){document.getElementById('csv-msg').textContent='Selecione o(s) CSV do WMS.';return;}
-  const addNew=document.getElementById('csv-add').checked;
+async function parseWMS(file){
   const saldo={}; let lidas=0;
-  for(const f of files){
-    const txt=await f.text(); const lines=txt.split(/\r?\n/);
-    let hi=lines.findIndex(l=>l.replace(/^\uFEFF/,'').startsWith('ID;SKU')); if(hi<0)continue;
-    const head=lines[hi].replace(/^\uFEFF/,'').split(';').map(s=>s.replace(/^"|"$/g,'').trim());
-    const iSku=head.indexOf('SKU'), iSal=head.indexOf('SALDO');
-    for(let j=hi+1;j<lines.length;j++){ const ln=lines[j]; if(!ln.trim())continue;
-      const c=ln.match(/("([^"]|"")*"|[^;]*)(;|$)/g).map(x=>x.replace(/;$/,'').replace(/^"|"$/g,'').trim());
-      const sku=(c[iSku]||'').trim(); if(!sku)continue;
-      const s=parseInt((c[iSal]||'0').replace(/\./g,'').replace(',','.'))||0; saldo[sku]=(saldo[sku]||0)+s; lidas++;
+  const txt=await file.text(); const lines=txt.split(/\r?\n/);
+  let hi=lines.findIndex(l=>l.replace(/^\uFEFF/,'').startsWith('ID;SKU')); if(hi<0)return{saldo,lidas};
+  const head=lines[hi].replace(/^\uFEFF/,'').split(';').map(s=>s.replace(/^"|"$/g,'').trim());
+  const iSku=head.indexOf('SKU'), iSal=head.indexOf('SALDO');
+  for(let j=hi+1;j<lines.length;j++){ const ln=lines[j]; if(!ln.trim())continue;
+    const c=ln.match(/("([^"]|"")*"|[^;]*)(;|$)/g).map(x=>x.replace(/;$/,'').replace(/^"|"$/g,'').trim());
+    const sku=(c[iSku]||'').trim(); if(!sku)continue;
+    const s=parseInt((c[iSal]||'0').replace(/\./g,'').replace(',','.'))||0; saldo[sku]=(saldo[sku]||0)+s; lidas++;
+  }
+  return{saldo,lidas};
+}
+document.getElementById('btn-csv').onclick=async()=>{
+  const fg=document.getElementById('f-csv-gru').files[0];
+  const fe=document.getElementById('f-csv-ext').files[0];
+  if(!fg&&!fe){document.getElementById('csv-msg').textContent='Selecione a planilha de Guarulhos e/ou a de Extrema.';return;}
+  const addNew=document.getElementById('csv-add').checked;
+  const g=fg?(await parseWMS(fg)):{saldo:{},lidas:0};
+  const e=fe?(await parseWMS(fe)):{saldo:{},lidas:0};
+  const skus=new Set([...Object.keys(g.saldo),...Object.keys(e.saldo)]);
+  const byId={}; rows.forEach(r=>byId[r.sku]=r);
+  let upd=0,crd=0;
+  for(const sku of skus){
+    const ex=byId[sku];
+    if(ex){
+      const uprow={...ex};
+      if(fg)uprow.est_gru=g.saldo[sku]||0;      // atualiza Guarulhos só se a planilha veio
+      if(fe)uprow.est_ext=e.saldo[sku]||0;      // atualiza Extrema só se a planilha veio
+      uprow.estoque=num(uprow.est_gru)+num(uprow.est_ext);
+      saveRow(uprow); upd++;
+    } else if(addNew){
+      const gg=fg?(g.saldo[sku]||0):0, ee=fe?(e.saldo[sku]||0):0;
+      saveRow({sku,produto:sku,curva:'C',cls:'',est_gru:gg,est_ext:ee,estoque:gg+ee,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); crd++;
     }
   }
-  let upd=0,crd=0;
-  for(const r of rows){ if(saldo[r.sku]!==undefined){ saveRow({...r,estoque:saldo[r.sku]}); upd++; delete saldo[r.sku]; } }
-  if(addNew){ for(const sku in saldo){ saveRow({sku,produto:sku,curva:'C',cls:'',estoque:saldo[sku],chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); crd++; } }
-  document.getElementById('csv-msg').textContent=`${lidas} linhas lidas · ${upd} SKUs atualizados${crd?` · ${crd} novos`:''}.`;
-  const h=document.getElementById('csv-hist'); h.textContent='Última atualização de estoque: '+new Date().toLocaleString('pt-BR');
-  document.getElementById('f-csv').value='';
+  const parts=[]; if(fg)parts.push('Guarulhos: '+g.lidas+' linhas'); if(fe)parts.push('Extrema: '+e.lidas+' linhas');
+  document.getElementById('csv-msg').textContent=`${parts.join(' · ')} · ${upd} SKUs atualizados${crd?` · ${crd} novos`:''}.`;
+  document.getElementById('csv-hist').textContent='Última atualização de estoque: '+new Date().toLocaleString('pt-BR');
+  document.getElementById('f-csv-gru').value=''; document.getElementById('f-csv-ext').value='';
 };
 
 /* ---- lançar chegada / baixa ---- */
@@ -699,6 +772,8 @@ document.getElementById('prod-filter').onchange=e=>{prodFilter=e.target.value;re
 document.querySelectorAll('#tc th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyC===k)sortAscC=!sortAscC;else{sortKeyC=k;sortAscC=['produto','curva'].includes(k);}render();});
 document.getElementById('busca-c').oninput=e=>{buscaC=e.target.value.toLowerCase();render();};
 document.getElementById('compras-filter').onchange=e=>{comprasFilter=e.target.value;render();};
+document.querySelectorAll('#te th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyE===k)sortAscE=!sortAscE;else{sortKeyE=k;sortAscE=['produto','curva'].includes(k);}render();});
+document.getElementById('busca-e').oninput=e=>{buscaE=e.target.value.toLowerCase();render();};
 document.getElementById('chart-n').oninput=()=>drawChart(enrich());
 document.getElementById('btn-reset').onclick=resetAll;
 const tbtn=document.getElementById('themebtn');
