@@ -301,17 +301,22 @@
   <!-- INSUMOS -->
   <section id="tab-insumos" style="display:none">
     <div class="tiles">
-      <div class="tile" style="--tc:var(--est)"><div class="lbl">SKUs com composição</div><div class="big" id="ti-skus">—</div><div class="s">produtos com insumos cadastrados</div></div>
+      <div class="tile" style="--tc:var(--est)"><div class="lbl">SKUs com composição</div><div class="big" id="ti-skus">—</div><div class="s">produtos já preenchidos</div></div>
+      <div class="tile" style="border-top-color:var(--bad)"><div class="lbl">Faltam preencher</div><div class="big" id="ti-falta">—</div><div class="s">SKUs sem composição</div></div>
       <div class="tile" style="--tc:var(--out)"><div class="lbl">Componentes cadastrados</div><div class="big" id="ti-comp">—</div><div class="s">linhas de materiais e processos</div></div>
+    </div>
+    <div class="card" style="border:2px solid var(--est)">
+      <h2>Para o time de compras — como preencher</h2>
+      <p class="note">Esta é a planilha de composição da Nouê. A ideia é mapear, <b>para cada produto (SKU)</b>, os insumos que entram nele. Jeito mais rápido: no produto, clique em <b>“Modelo ▾”</b> e escolha um ponto de partida (com silk, com rótulo, bisnaga, pote, oxidante) — ele cria as linhas típicas e você só ajusta nome, <b>quantidade</b>, <b>custo</b>, estoque e fornecedor. Também dá para <b>+ material</b>, <b>+ processo</b>, copiar de outro produto, ou remover (×). <b>Material</b> = peça física (frasco, pump, cartucho, rótulo, tampa, bisnaga, pote). <b>Processo</b> = etapa (silk/serigrafia, envase). Produtos de revenda/prontos (ex.: necessaire) não têm composição — é só deixar vazio. Tudo salva sozinho e aparece para todo o time.</p>
     </div>
     <div class="card">
       <h2>Composição de insumos por produto</h2>
-      <p class="note">Cada produto (SKU) tem abaixo dele os componentes necessários. <b>Material</b> = peça física (frasco, pump, cartucho, rótulo). <b>Processo</b> = etapa de produção (silk/serigrafia, envase). Clique em qualquer campo para editar; use os botões para adicionar, remover ou copiar a composição de outro produto. Tudo salva no banco e sincroniza com a equipe.</p>
       <div class="filterbar">
         <input id="busca-i" placeholder="Buscar SKU ou produto" style="min-width:220px">
-        <span class="chip on" data-if="com" id="if-com">com composição</span>
-        <span class="chip" data-if="sem">sem composição</span>
         <span class="chip" data-if="all">todos</span>
+        <span class="chip on" data-if="prod">produzidos (tem fábrica)</span>
+        <span class="chip" data-if="sem">faltam preencher</span>
+        <span class="chip" data-if="com">com composição</span>
         <span class="muted" id="cnt-i" style="font-size:12.5px;margin-left:6px"></span>
       </div>
       <div id="insumos-wrap"></div>
@@ -424,6 +429,37 @@ const INSUMOS_CAMU140=[
   {nome:'Cartucho',tipo:'material',etapa:'Cartucho',qtd:1,custo:0,est:0,forn:'CCS',obs:'arte por produto'}
 ];
 ['CAMUMEDI140ML','CAMULIGHT140ML','CAMUPEARL140ML','CAMUGRAY140ML','CAMUCOOPER140ML','CAMUSILVER140ML'].forEach(sku=>{const r=SEED.find(x=>x.sku===sku); if(r&&!Array.isArray(r.insumos))r.insumos=INSUMOS_CAMU140.map(c=>({...c}));});
+// Modelos de partida para o time de compras (todos editáveis depois de aplicar)
+const MODELOS={
+  silk:{nome:'Com silk (frasco · pump · silk · cartucho)',itens:INSUMOS_CAMU140},
+  rotulo:{nome:'Com rótulo (frasco · pump · rótulo · cartucho)',itens:[
+    {nome:'Frasco 140ml 24/410',tipo:'material',etapa:'Frasco',qtd:1,custo:0,est:0,forn:'LudPack',obs:''},
+    {nome:'Pump 24/410 preta',tipo:'material',etapa:'Pump',qtd:1,custo:0,est:0,forn:'LeadPak / Valem',obs:''},
+    {nome:'Rótulo',tipo:'material',etapa:'Rótulo',qtd:1,custo:0,est:0,forn:'Celler / CLR / Pix Label',obs:'arte por produto'},
+    {nome:'Cartucho',tipo:'material',etapa:'Cartucho',qtd:1,custo:0,est:0,forn:'CCS',obs:'arte por produto'}
+  ]},
+  bisnaga:{nome:'Bisnaga 60g (Glow)',itens:[
+    {nome:'Bisnaga 60g',tipo:'material',etapa:'Bisnaga',qtd:1,custo:0,est:0,forn:'Masitubos',obs:''},
+    {nome:'Tampa',tipo:'material',etapa:'Tampa',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Cartucho',tipo:'material',etapa:'Cartucho',qtd:1,custo:0,est:0,forn:'CCS',obs:''}
+  ]},
+  pote:{nome:'Pote (máscara)',itens:[
+    {nome:'Pote',tipo:'material',etapa:'Pote',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Tampa',tipo:'material',etapa:'Tampa',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Rótulo',tipo:'material',etapa:'Rótulo',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Cartucho',tipo:'material',etapa:'Cartucho',qtd:1,custo:0,est:0,forn:'CCS',obs:''}
+  ]},
+  oxidante:{nome:'Oxidante 900ml',itens:[
+    {nome:'Frasco 900ml',tipo:'material',etapa:'Frasco',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Tampa / válvula',tipo:'material',etapa:'Tampa',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Rótulo',tipo:'material',etapa:'Rótulo',qtd:1,custo:0,est:0,forn:'',obs:''}
+  ]},
+  frasco1l:{nome:'Frasco 1L',itens:[
+    {nome:'Frasco 1L',tipo:'material',etapa:'Frasco',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Tampa',tipo:'material',etapa:'Tampa',qtd:1,custo:0,est:0,forn:'',obs:''},
+    {nome:'Rótulo',tipo:'material',etapa:'Rótulo',qtd:1,custo:0,est:0,forn:'',obs:''}
+  ]}
+};
 const fmt=d3.format(','), pfmt=d3.format('+.0%');
 const cfmt=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
 const brl=v=>'R$ '+new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1}).format(v);
@@ -435,7 +471,7 @@ let tab='geral', sortKey='demanda', sortAsc=false, sortKeyV='fat', sortAscV=fals
 let sortKeyP='prodTot', sortAscP=false, buscaP='', prodFilter='prod';
 let sortKeyC='faltaComprar', sortAscC=false, buscaC='', comprasFilter='comprar';
 let sortKeyE='estoque', sortAscE=false, buscaE='';
-let buscaI='', insumosFilter='com';
+let buscaI='', insumosFilter='prod';
 const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"plano":22000,"status":"Plano acima do necessário"},"CAMUTOUCHECC":{"plano":11200,"status":"Bate"},"CAMUTOUCH":{"plano":10450,"status":"Bate"},"MELANOREATIV":{"plano":1200,"status":"ROMPE com o plano"},"COULEURSPEROLA140ML":{"plano":2000,"status":"ROMPE com o plano"},"CAMUTOUCHLE":{"plano":5950,"status":"Bate"},"CAMUTOUCHLC":{"plano":2650,"status":"Plano acima do necessário"},"Shampoocamuflage1litro":{"plano":0,"status":"Sem demanda"},"F9GTJD8XSP":{"plano":0,"status":"Sem demanda"},"OLEOREGENER30ML":{"plano":0,"status":"Sem demanda"},"SHAMPOOREGENER250ML":{"plano":0,"status":"Sem demanda"},"CAMUMEDI140ML":{"plano":300000,"status":"Bate"},"CAMUMEDI1L":{"plano":2300,"status":"Plano acima do necessário"},"10OXIGENADAOX900ML":{"plano":6000,"status":"Bate"},"NOVOSHAMPOOCAMUFLAGE1LITRO":{"plano":10000,"status":"Plano acima do necessário"},"NOVOSHAMPOONOUE140ML":{"plano":50000,"status":"ROMPE com o plano"},"CAMUCOOPER140ML":{"plano":5000,"status":"Bate"},"COULEURSCHOCOLAT140ML":{"plano":2500,"status":"Bate"},"CAMULIGHT140ML":{"plano":100000,"status":"Bate"},"COLGLOW60G":{"plano":25000,"status":"Plano acima do necessário"},"MASCARACAMU150G":{"plano":20000,"status":"Plano acima do necessário"},"SHAMPOOPRECAMU140ML":{"plano":25000,"status":"Plano acima do necessário"},"SPRAYREGENERNV200ML":{"plano":10000,"status":"Plano acima do necessário"},"COLGLOWINTENSE60G":{"plano":0,"status":"Bate"},"CAMULIGHT1L":{"plano":2000,"status":"Bate"},"OLEOREGENER30ML2":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSMANTEIGA140ML":{"plano":0,"status":"Bate"},"CAMUGRAY140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSAVELA140ML":{"plano":0,"status":"Bate"},"MASCARAREGENER250G":{"plano":4000,"status":"Plano acima do necessário"},"PERFUMERENEGER50ML":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSDOCE140ML":{"plano":0,"status":"Bate"},"CAMUSILVER140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSMEL140ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER250MLNOVO":{"plano":4000,"status":"Bate"},"KITRAPIDOGLOW":{"plano":0,"status":"Bate"},"COULEURSCANNELLE140ML":{"plano":2500,"status":"Bate"},"MASCARAREGENER500G":{"plano":1000,"status":"Bate"},"COULEURSCUIVRE140ML":{"plano":2500,"status":"Bate"},"MASCARAFORTIFYE500G":{"plano":1000,"status":"Bate"},"SERUMREGENERADOR":{"plano":2500,"status":"Plano acima do necessário"},"COULEURSPEROLA500ML":{"plano":0,"status":"Bate"},"CAMUPEARL1L":{"plano":0,"status":"Bate"},"PERFUMEFORTIFYE50ML":{"plano":0,"status":"Bate"},"COULEURSMANTEIGA500ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER1L":{"plano":500,"status":"Bate"},"OLEOFORTIFYE30ML":{"plano":0,"status":"Bate"},"GELFORTIFYE250ML":{"plano":1000,"status":"Bate"},"MASCARASILVERY500G":{"plano":0,"status":"Bate"},"LEAVEINFORTIFYE200ML":{"plano":0,"status":"Bate"},"COULEURSAVELA500ML":{"plano":0,"status":"Bate"},"MASCARAFORTIFYE250G":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE250ML":{"plano":1000,"status":"Bate"},"COULEURSDOCE500ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY250ML":{"plano":0,"status":"Bate"},"LUMIERE500G":{"plano":0,"status":"Bate"},"MASCARASILVERY300G":{"plano":0,"status":"Bate"},"COULEURSMEL500ML":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE1L":{"plano":0,"status":"Bate"},"10OXIGENADA120ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY1L":{"plano":0,"status":"Bate"},"20OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"GELFORTIFYE1L":{"plano":0,"status":"Bate"},"30OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"PROTEINE1L":{"plano":0,"status":"Bate"}};
 
 /* ---- persistência: Supabase (banco próprio da Nouê) ---- */
@@ -783,7 +819,11 @@ function startComprasCell(td,r){
 /* ---- insumos (composição por produto) ---- */
 function insArr(r){ return Array.isArray(r.insumos)?r.insumos:[]; }
 function saveIns(sku,arr){ const r=rows.find(x=>x.sku===sku); if(!r)return; saveRow({...r,insumos:arr}); }
-function insAdd(sku,tipo){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).slice(); arr.push({nome:'',tipo:tipo||'material',est:0,qtd:1,forn:'',obs:''}); saveIns(sku,arr); }
+function insAdd(sku,tipo){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).slice(); arr.push({nome:'',tipo:tipo||'material',etapa:'',qtd:1,custo:0,est:0,forn:'',obs:''}); insFocus={sku,i:arr.length-1}; saveIns(sku,arr); }
+function insModelo(sku,key){ const m=MODELOS[key]; if(!m)return; const r=rows.find(x=>x.sku===sku); if(!r)return;
+  if(insArr(r).length&&!confirm('Substituir a composição atual de '+(r.produto||sku)+' pelo modelo “'+m.nome+'”?'))return;
+  saveIns(sku,m.itens.map(c=>({...c}))); }
+let insFocus=null;
 function insDel(sku,i){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).slice(); arr.splice(i,1); saveIns(sku,arr); }
 function insSet(sku,i,k,v){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).map(x=>({...x})); if(!arr[i])return; arr[i][k]=v; saveIns(sku,arr); }
 function insCopy(fromSku,toSku){ const f=rows.find(x=>x.sku===fromSku); if(!f)return; const arr=insArr(f).map(x=>({...x})); saveIns(toSku,arr); }
@@ -797,14 +837,18 @@ function insCellEdit(td,sku,i,k,isNum,isDec){
 }
 function drawInsumos(data){
   const withComp=data.filter(r=>insArr(r).length>0);
+  const produzidos=data.filter(r=>r.fab);
+  const faltam=produzidos.filter(r=>insArr(r).length===0);
   document.getElementById('ti-skus').textContent=withComp.length;
+  document.getElementById('ti-falta').textContent=faltam.length;
   document.getElementById('ti-comp').textContent=d3.sum(data,r=>insArr(r).length);
   // filter chips
   document.querySelectorAll('#tab-insumos .chip').forEach(c=>{ if(!c.dataset.bound){ c.dataset.bound=1;
     c.onclick=()=>{ insumosFilter=c.dataset.if; document.querySelectorAll('#tab-insumos .chip').forEach(x=>x.classList.toggle('on',x.dataset.if===insumosFilter)); render(); }; } });
   let d=data.filter(r=>!buscaI||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaI));
   if(insumosFilter==='com')d=d.filter(r=>insArr(r).length>0);
-  else if(insumosFilter==='sem')d=d.filter(r=>insArr(r).length===0);
+  else if(insumosFilter==='sem')d=d.filter(r=>r.fab&&insArr(r).length===0);
+  else if(insumosFilter==='prod')d=d.filter(r=>r.fab);
   const allSkus=data.map(r=>r.sku);
   const wrap=document.getElementById('insumos-wrap'); wrap.innerHTML='';
   document.getElementById('cnt-i').textContent=`${d.length} SKUs`;
@@ -816,12 +860,15 @@ function drawInsumos(data){
     const hd=document.createElement('div'); hd.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px';
     hd.innerHTML=`<div><b style="font-size:15px">${r.produto||r.sku}</b> <span class="muted" style="font-size:11.5px">· ${r.sku} · curva ${r.curva||'-'}${r.fab?(' · fábrica '+r.fab):''}</span></div>`;
     const btns=document.createElement('div'); btns.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
+    const mod=document.createElement('select'); mod.className='mini'; mod.style.cssText='padding:3px 8px;font-size:12px';
+    mod.innerHTML='<option value="">Modelo ▾</option>'+Object.entries(MODELOS).map(([k,m])=>`<option value="${k}">${m.nome}</option>`).join('');
+    mod.onchange=()=>{ if(mod.value){ insModelo(r.sku,mod.value); mod.value=''; } };
     const bMat=document.createElement('button'); bMat.className='mini'; bMat.textContent='+ material'; bMat.onclick=()=>insAdd(r.sku,'material');
     const bPro=document.createElement('button'); bPro.className='mini'; bPro.textContent='+ processo'; bPro.onclick=()=>insAdd(r.sku,'processo');
     const sel=document.createElement('select'); sel.className='mini'; sel.style.cssText='padding:3px 8px;font-size:12px';
     sel.innerHTML='<option value="">copiar de…</option>'+allSkus.filter(s=>s!==r.sku&&insArr(rows.find(x=>x.sku===s)).length>0).map(s=>`<option value="${s}">${(rows.find(x=>x.sku===s).produto||s).slice(0,34)}</option>`).join('');
     sel.onchange=()=>{ if(sel.value){ if(arr.length&&!confirm('Substituir a composição atual de '+(r.produto||r.sku)+'?')){sel.value='';return;} insCopy(sel.value,r.sku);} };
-    btns.append(bMat,bPro,sel); hd.appendChild(btns); card.appendChild(hd);
+    btns.append(mod,bMat,bPro,sel); hd.appendChild(btns); card.appendChild(hd);
     if(!arr.length){ const e=document.createElement('div'); e.className='muted'; e.style.fontSize='12.5px'; e.textContent='Sem componentes. Use “+ material” / “+ processo” ou copie de outro produto.'; card.appendChild(e); wrap.appendChild(card); continue; }
     // table
     const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th class="l">Componente</th><th class="l">Etapa</th><th>Tipo</th><th>Qtd/un</th><th>Custo un (R$)</th><th>Estoque insumo</th><th class="l">Fornecedor</th><th class="l">Obs</th><th></th></tr></thead>';
@@ -829,6 +876,7 @@ function drawInsumos(data){
     arr.forEach((c,i)=>{
       const tr=document.createElement('tr');
       const tdN=document.createElement('td');tdN.className='l edit-cell';tdN.textContent=c.nome||'—';if(!c.nome)tdN.style.color='var(--muted)';tdN.onclick=()=>insCellEdit(tdN,r.sku,i,'nome',false);tr.appendChild(tdN);
+      if(insFocus&&insFocus.sku===r.sku&&insFocus.i===i){ const t=tdN; insFocus=null; setTimeout(()=>{ if(!cellEdit)insCellEdit(t,r.sku,i,'nome',false); },30); }
       const tdEt=document.createElement('td');tdEt.className='l edit-cell';tdEt.textContent=c.etapa||'—';if(!c.etapa)tdEt.style.color='var(--muted)';tdEt.onclick=()=>insCellEdit(tdEt,r.sku,i,'etapa',false);tr.appendChild(tdEt);
       const tdT=document.createElement('td');const isPro=(c.tipo==='processo');const pill=document.createElement('span');pill.className='pill';pill.style.cursor='pointer';pill.textContent=isPro?'Processo':'Material';pill.style.color=isPro?'var(--fat)':'var(--est)';pill.style.borderColor=isPro?'var(--fat)':'var(--est)';pill.onclick=()=>insSet(r.sku,i,'tipo',isPro?'material':'processo');tdT.appendChild(pill);tr.appendChild(tdT);
       const tdQ=document.createElement('td');tdQ.className='edit-cell';tdQ.textContent=num(c.qtd)||1;tdQ.onclick=()=>insCellEdit(tdQ,r.sku,i,'qtd',true);tr.appendChild(tdQ);
