@@ -421,6 +421,7 @@
       <div class="tbox">
         <table id="tb"><thead><tr>
           <th class="l" data-k="sku">SKU</th>
+          <th class="l" data-k="ean">EAN</th>
           <th class="l" data-k="produto">Produto</th>
           <th data-k="curva">Curva</th>
           <th data-k="estoque"><span class="dot" style="background:var(--est)"></span>Estoque</th>
@@ -562,6 +563,8 @@ async function saveRow(d){
   FIELDS.forEach(k=>row[k]=num(d[k]));
   if(d.plano!==undefined&&d.plano!==null&&d.plano!=='')row.plano=num(d.plano);
   if(Array.isArray(d.insumos))row.insumos=d.insumos;
+  if(d.ean!==undefined&&d.ean!==null&&d.ean!=='')row.ean=String(d.ean);
+  if(d.fab!==undefined&&d.fab!==null&&d.fab!=='')row.fab=String(d.fab);
   const i=rows.findIndex(r=>r.sku===d.sku); if(i>=0)rows[i]=row; else rows.push(row); render();
   if(!sb){ setStatus('⚠️ Sem conexão — edição não salva.'); return; }
   const {error}=await sb.from(TBL).upsert({sku:row.sku,data:row,updated_at:new Date().toISOString(),updated_by:userName||null},{onConflict:'sku'});
@@ -1031,6 +1034,7 @@ function drawTable(data){
   for(const r of d){
     const tr=document.createElement('tr');
     const tdSku=document.createElement('td');tdSku.className='l';tdSku.textContent=r.sku;tr.appendChild(tdSku);
+    const tdEan=document.createElement('td');tdEan.className='l edit-cell';tdEan.textContent=r.ean||'—';if(!r.ean)tdEan.style.color='var(--muted)';tdEan.onclick=()=>startCell(tdEan,r,'ean',true);tr.appendChild(tdEan);
     const tdP=document.createElement('td');tdP.className='l';tdP.textContent=r.produto||'';tr.appendChild(tdP);
     const tdC=document.createElement('td');tdC.textContent=r.curva||'-';tr.appendChild(tdC);
     ['estoque','chega_out','chega_dez','necessidade','demanda'].forEach(k=>{ const td=document.createElement('td'); td.className='edit-cell'; td.textContent=fmt(num(r[k])); td.onclick=()=>startCell(td,r,k); tr.appendChild(td); });
