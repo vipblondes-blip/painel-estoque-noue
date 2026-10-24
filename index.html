@@ -323,6 +323,7 @@
         <span class="chip" data-if="prod">produzidos (tem fábrica)</span>
         <span class="chip" data-if="sem">faltam preencher</span>
         <span class="chip" data-if="com">com composição</span>
+        <span class="chip" data-if="semvenda">sem venda (revisar/excluir)</span>
         <span class="muted" id="cnt-i" style="font-size:12.5px;margin-left:6px"></span>
       </div>
       <div id="insumos-wrap"></div>
@@ -878,6 +879,7 @@ function drawInsumos(data){
   if(insumosFilter==='com')d=d.filter(r=>insArr(r).length>0);
   else if(insumosFilter==='sem')d=d.filter(r=>r.fab&&insArr(r).length===0);
   else if(insumosFilter==='prod')d=d.filter(r=>r.fab);
+  else if(insumosFilter==='semvenda')d=d.filter(r=>num(r.demanda)===0&&num(r.preco)===0&&(num(r.v_ago)+num(r.v_set)+num(r.v_out))===0);
   const allSkus=data.map(r=>r.sku);
   const wrap=document.getElementById('insumos-wrap'); wrap.innerHTML='';
   document.getElementById('cnt-i').textContent=`${d.length} SKUs`;
@@ -897,7 +899,9 @@ function drawInsumos(data){
     const sel=document.createElement('select'); sel.className='mini'; sel.style.cssText='padding:3px 8px;font-size:12px';
     sel.innerHTML='<option value="">copiar de…</option>'+allSkus.filter(s=>s!==r.sku&&insArr(rows.find(x=>x.sku===s)).length>0).map(s=>`<option value="${s}">${(rows.find(x=>x.sku===s).produto||s).slice(0,34)}</option>`).join('');
     sel.onchange=()=>{ if(sel.value){ if(arr.length&&!confirm('Substituir a composição atual de '+(r.produto||r.sku)+'?')){sel.value='';return;} insCopy(sel.value,r.sku);} };
-    btns.append(mod,bMat,bPro,sel); hd.appendChild(btns); card.appendChild(hd);
+    const bDel=document.createElement('button'); bDel.className='mini danger'; bDel.textContent='🗑 Excluir SKU'; bDel.title='Remove o produto do painel inteiro';
+    bDel.onclick=()=>{ if(confirm('Excluir DEFINITIVAMENTE o SKU "'+(r.produto||r.sku)+'" ('+r.sku+')?\n\nEle sai de TODAS as abas (estoque, vendas, compras, insumos). Use para códigos internos/kits que não são produtos de venda.')) removeRow(r.sku); };
+    btns.append(mod,bMat,bPro,sel,bDel); hd.appendChild(btns); card.appendChild(hd);
     if(!arr.length){ const e=document.createElement('div'); e.className='muted'; e.style.fontSize='12.5px'; e.textContent='Sem componentes. Use “+ material” / “+ processo” ou copie de outro produto.'; card.appendChild(e); wrap.appendChild(card); continue; }
     // table
     const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th class="l">Componente</th><th class="l">Etapa</th><th>Tipo</th><th>Qtd/un</th><th>Custo un (R$)</th><th>Estoque insumo</th><th class="l">Fornecedor</th><th class="l">Obs</th><th></th></tr></thead>';
