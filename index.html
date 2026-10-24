@@ -313,8 +313,8 @@
       <h2>Composição de insumos por produto</h2>
       <div class="filterbar">
         <input id="busca-i" placeholder="Buscar SKU ou produto" style="min-width:220px">
-        <span class="chip" data-if="all">todos</span>
-        <span class="chip on" data-if="prod">produzidos (tem fábrica)</span>
+        <span class="chip on" data-if="all">todos os SKUs</span>
+        <span class="chip" data-if="prod">produzidos (tem fábrica)</span>
         <span class="chip" data-if="sem">faltam preencher</span>
         <span class="chip" data-if="com">com composição</span>
         <span class="muted" id="cnt-i" style="font-size:12.5px;margin-left:6px"></span>
@@ -360,6 +360,22 @@
         <label>Destino (onde entrega)<input id="pd-dest" placeholder="auto"></label>
       </div>
       <div id="pd-msg" class="hint"></div>
+    </div>
+    <div class="card" style="border:2px solid var(--fat)">
+      <h2>📄 Exportar pedido de compra (PDF)</h2>
+      <p class="note">Gere um documento de pedido para enviar ao fornecedor. Escolha o fornecedor (ou todos), opcionalmente filtre por etapa, e clique em gerar — abre a versão para impressão, onde você escolhe <b>“Salvar como PDF”</b>. Os dados da empresa abaixo aparecem no cabeçalho e ficam salvos neste navegador.</p>
+      <div class="form-grid" style="grid-template-columns:1.2fr 1fr 1fr auto;align-items:end">
+        <label>Fornecedor<select id="ex-forn"></select></label>
+        <label>Etapa<select id="ex-etapa"><option value="">todas</option><option value="pedido">Pedido realizado</option><option value="transito">Previsão de entrega</option><option value="empresa">Na empresa</option></select></label>
+        <label>Nº do pedido (opcional)<input id="ex-num" placeholder="ex: 2026-001"></label>
+        <button class="primary" id="ex-gerar">Gerar PDF</button>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1.3fr 1fr 1.2fr;align-items:end;margin-top:10px">
+        <label>Empresa (cabeçalho)<input id="ex-emp" placeholder="Nouê Cosméticos Ltda"></label>
+        <label>CNPJ<input id="ex-cnpj" placeholder="00.000.000/0001-00"></label>
+        <label>Contato / comprador<input id="ex-contato" placeholder="nome · e-mail · telefone"></label>
+      </div>
+      <div id="ex-msg" class="hint"></div>
     </div>
     <div class="card">
       <h2>Todos os pedidos</h2>
@@ -471,7 +487,7 @@ let tab='geral', sortKey='demanda', sortAsc=false, sortKeyV='fat', sortAscV=fals
 let sortKeyP='prodTot', sortAscP=false, buscaP='', prodFilter='prod';
 let sortKeyC='faltaComprar', sortAscC=false, buscaC='', comprasFilter='comprar';
 let sortKeyE='estoque', sortAscE=false, buscaE='';
-let buscaI='', insumosFilter='prod';
+let buscaI='', insumosFilter='all';
 const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"plano":22000,"status":"Plano acima do necessário"},"CAMUTOUCHECC":{"plano":11200,"status":"Bate"},"CAMUTOUCH":{"plano":10450,"status":"Bate"},"MELANOREATIV":{"plano":1200,"status":"ROMPE com o plano"},"COULEURSPEROLA140ML":{"plano":2000,"status":"ROMPE com o plano"},"CAMUTOUCHLE":{"plano":5950,"status":"Bate"},"CAMUTOUCHLC":{"plano":2650,"status":"Plano acima do necessário"},"Shampoocamuflage1litro":{"plano":0,"status":"Sem demanda"},"F9GTJD8XSP":{"plano":0,"status":"Sem demanda"},"OLEOREGENER30ML":{"plano":0,"status":"Sem demanda"},"SHAMPOOREGENER250ML":{"plano":0,"status":"Sem demanda"},"CAMUMEDI140ML":{"plano":300000,"status":"Bate"},"CAMUMEDI1L":{"plano":2300,"status":"Plano acima do necessário"},"10OXIGENADAOX900ML":{"plano":6000,"status":"Bate"},"NOVOSHAMPOOCAMUFLAGE1LITRO":{"plano":10000,"status":"Plano acima do necessário"},"NOVOSHAMPOONOUE140ML":{"plano":50000,"status":"ROMPE com o plano"},"CAMUCOOPER140ML":{"plano":5000,"status":"Bate"},"COULEURSCHOCOLAT140ML":{"plano":2500,"status":"Bate"},"CAMULIGHT140ML":{"plano":100000,"status":"Bate"},"COLGLOW60G":{"plano":25000,"status":"Plano acima do necessário"},"MASCARACAMU150G":{"plano":20000,"status":"Plano acima do necessário"},"SHAMPOOPRECAMU140ML":{"plano":25000,"status":"Plano acima do necessário"},"SPRAYREGENERNV200ML":{"plano":10000,"status":"Plano acima do necessário"},"COLGLOWINTENSE60G":{"plano":0,"status":"Bate"},"CAMULIGHT1L":{"plano":2000,"status":"Bate"},"OLEOREGENER30ML2":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSMANTEIGA140ML":{"plano":0,"status":"Bate"},"CAMUGRAY140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSAVELA140ML":{"plano":0,"status":"Bate"},"MASCARAREGENER250G":{"plano":4000,"status":"Plano acima do necessário"},"PERFUMERENEGER50ML":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSDOCE140ML":{"plano":0,"status":"Bate"},"CAMUSILVER140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSMEL140ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER250MLNOVO":{"plano":4000,"status":"Bate"},"KITRAPIDOGLOW":{"plano":0,"status":"Bate"},"COULEURSCANNELLE140ML":{"plano":2500,"status":"Bate"},"MASCARAREGENER500G":{"plano":1000,"status":"Bate"},"COULEURSCUIVRE140ML":{"plano":2500,"status":"Bate"},"MASCARAFORTIFYE500G":{"plano":1000,"status":"Bate"},"SERUMREGENERADOR":{"plano":2500,"status":"Plano acima do necessário"},"COULEURSPEROLA500ML":{"plano":0,"status":"Bate"},"CAMUPEARL1L":{"plano":0,"status":"Bate"},"PERFUMEFORTIFYE50ML":{"plano":0,"status":"Bate"},"COULEURSMANTEIGA500ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER1L":{"plano":500,"status":"Bate"},"OLEOFORTIFYE30ML":{"plano":0,"status":"Bate"},"GELFORTIFYE250ML":{"plano":1000,"status":"Bate"},"MASCARASILVERY500G":{"plano":0,"status":"Bate"},"LEAVEINFORTIFYE200ML":{"plano":0,"status":"Bate"},"COULEURSAVELA500ML":{"plano":0,"status":"Bate"},"MASCARAFORTIFYE250G":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE250ML":{"plano":1000,"status":"Bate"},"COULEURSDOCE500ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY250ML":{"plano":0,"status":"Bate"},"LUMIERE500G":{"plano":0,"status":"Bate"},"MASCARASILVERY300G":{"plano":0,"status":"Bate"},"COULEURSMEL500ML":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE1L":{"plano":0,"status":"Bate"},"10OXIGENADA120ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY1L":{"plano":0,"status":"Bate"},"20OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"GELFORTIFYE1L":{"plano":0,"status":"Bate"},"30OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"PROTEINE1L":{"plano":0,"status":"Bate"}};
 
 /* ---- persistência: Supabase (banco próprio da Nouê) ---- */
@@ -927,6 +943,9 @@ function pedList(){ return pedidos.filter(p=>!buscaPd||((p.comp||'')+' '+(p.forn
 function drawPedidos(data){
   const tb=document.querySelector('#tpd tbody'); tb.innerHTML='';
   const lst=pedList();
+  // fornecedores distintos para o exportador
+  const forns=[...new Set(pedidos.map(p=>(p.forn||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const selF=document.getElementById('ex-forn'); if(selF){ const cur=selF.value; selF.innerHTML='<option value="__all__">— todos os fornecedores —</option>'+forns.map(f=>`<option value="${f.replace(/"/g,'&quot;')}">${f}</option>`).join(''); if(cur)selF.value=cur; }
   document.getElementById('cnt-pd').textContent=`${lst.length} pedidos`;
   if(!lst.length){ tb.innerHTML='<tr><td colspan="12" class="muted" style="padding:12px">Nenhum pedido ainda. Lance o primeiro no formulário acima.</td></tr>'; return; }
   for(const p of lst){
@@ -1105,6 +1124,74 @@ document.getElementById('busca-i').oninput=e=>{buscaI=e.target.value.toLowerCase
 document.getElementById('busca-pd').oninput=e=>{buscaPd=e.target.value.toLowerCase();render();};
 document.getElementById('busca-en').oninput=e=>{buscaEn=e.target.value.toLowerCase();render();};
 (function(){ const d=document.getElementById('pd-data'); if(d)d.value=todayISO; })();
+// Dados da empresa para o cabeçalho do PDF (salvos no navegador)
+(function(){ const def={emp:'Nouê Cosméticos Ltda',cnpj:'',contato:''};
+  let cfg; try{cfg=JSON.parse(localStorage.getItem('noue_emp')||'null')||def;}catch(e){cfg=def;}
+  ['emp','cnpj','contato'].forEach(k=>{ const el=document.getElementById('ex-'+k); if(!el)return; el.value=cfg[k]||'';
+    el.oninput=()=>{ cfg[k]=el.value; localStorage.setItem('noue_emp',JSON.stringify(cfg)); }; });
+})();
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function gerarPedidoPDF(){
+  const fsel=document.getElementById('ex-forn').value;
+  const etapa=document.getElementById('ex-etapa').value;
+  const num=document.getElementById('ex-num').value.trim();
+  const emp=document.getElementById('ex-emp').value.trim()||'Nouê Cosméticos Ltda';
+  const cnpj=document.getElementById('ex-cnpj').value.trim();
+  const contato=document.getElementById('ex-contato').value.trim();
+  let base=pedidos.filter(p=>!etapa||p.etapa===etapa);
+  if(fsel!=='__all__')base=base.filter(p=>(p.forn||'').trim()===fsel);
+  if(!base.length){ document.getElementById('ex-msg').textContent='Nenhum pedido para esse fornecedor/etapa.'; return; }
+  const forns=[...new Set(base.map(p=>(p.forn||'(sem fornecedor)').trim()))].sort((a,b)=>a.localeCompare(b));
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const etapaLbl=et=>(ETAPAS.find(e=>e[0]===et)||['','']) [1]||'—';
+  let secoes='';
+  for(const f of forns){
+    const items=base.filter(p=>(p.forn||'(sem fornecedor)').trim()===f);
+    const tot=items.reduce((s,p)=>s+pedValor(p),0);
+    const linhas=items.map(p=>`<tr>
+      <td>${esc(p.comp)}</td><td>${esc(p.produto||p.sku||'')}</td>
+      <td class="r">${fmt(num_(p.qtd))}</td>
+      <td class="r">${num_(p.custo)?num_(p.custo).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'—'}</td>
+      <td class="r">${pedValor(p)?pedValor(p).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):'—'}</td>
+      <td>${esc(p.prev||'')}</td><td>${esc(p.dest||'')}</td></tr>`).join('');
+    secoes+=`<section class="po">
+      <div class="po-head">
+        <div><div class="co">${esc(emp)}</div>${cnpj?`<div class="sub">CNPJ: ${esc(cnpj)}</div>`:''}${contato?`<div class="sub">${esc(contato)}</div>`:''}</div>
+        <div class="po-meta"><div class="title">PEDIDO DE COMPRA</div><div class="sub">Data: ${hoje}${num?` · Nº ${esc(num)}`:''}</div>${etapa?`<div class="sub">Etapa: ${esc(etapaLbl(etapa))}</div>`:''}</div>
+      </div>
+      <div class="forn">Fornecedor: <b>${esc(f)}</b></div>
+      <table><thead><tr><th>Componente</th><th>Produto</th><th class="r">Qtd</th><th class="r">Custo un.</th><th class="r">Valor</th><th>Previsão</th><th>Entregar em</th></tr></thead>
+      <tbody>${linhas}</tbody>
+      <tfoot><tr><td colspan="4" class="r"><b>Total do pedido</b></td><td class="r"><b>${tot.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</b></td><td colspan="2"></td></tr></tfoot></table>
+      <div class="obs">Observações: ____________________________________________________________________</div>
+      <div class="assin"><div>_____________________________<br>${esc(emp)}</div><div>_____________________________<br>${esc(f)}</div></div>
+    </section>`;
+  }
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>Pedido de Compra${num?(' '+num):''}</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1d2733;margin:0;padding:28px;font-size:13px}
+    .po{page-break-after:always;max-width:780px;margin:0 auto 24px}
+    .po:last-child{page-break-after:auto}
+    .po-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2f7f8c;padding-bottom:12px;margin-bottom:14px}
+    .co{font-size:19px;font-weight:700} .sub{color:#64707d;font-size:12px;margin-top:2px}
+    .po-meta{text-align:right} .title{font-size:16px;font-weight:700;color:#2f7f8c;letter-spacing:.5px}
+    .forn{margin:6px 0 12px;font-size:14px}
+    table{width:100%;border-collapse:collapse;font-size:12.5px} th,td{border:1px solid #d9d4c8;padding:7px 8px;text-align:left} th{background:#f2efe7}
+    td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+    tfoot td{background:#faf7f0}
+    .obs{margin-top:16px;color:#64707d} .assin{display:flex;justify-content:space-between;gap:40px;margin-top:40px;text-align:center;color:#64707d}
+    @media print{body{padding:0} .noprint{display:none}}
+    .bar{position:sticky;top:0;background:#fff;padding:10px 0 16px;text-align:center}
+    .bar button{font:inherit;padding:9px 18px;border-radius:8px;border:1px solid #2f7f8c;background:#2f7f8c;color:#fff;cursor:pointer}
+  </style></head><body>
+  <div class="bar noprint"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>
+  ${secoes}</body></html>`;
+  const w=window.open('','_blank'); if(!w){ document.getElementById('ex-msg').textContent='Permita pop-ups para abrir o PDF.'; return; }
+  w.document.write(html); w.document.close(); w.focus(); setTimeout(()=>{try{w.print();}catch(e){}},400);
+  document.getElementById('ex-msg').textContent='Documento gerado — use “Salvar como PDF” na janela aberta.';
+}
+const num_=num;
+document.getElementById('ex-gerar').onclick=gerarPedidoPDF;
 document.getElementById('pd-add').onclick=()=>{
   const comp=document.getElementById('pd-comp').value.trim();
   if(!comp){document.getElementById('pd-msg').textContent='Informe ao menos o componente.';return;}
