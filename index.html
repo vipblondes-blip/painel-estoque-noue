@@ -105,6 +105,9 @@
     <button data-tab="producao">🏭 Calendário de produção</button>
     <button data-tab="compras">🛒 Calendário de compras</button>
     <button data-tab="insumos">🧩 Insumos</button>
+    <button data-tab="pagamentos">💰 Pagamentos previstos</button>
+    <button data-tab="pedidos">🛒 Pedidos</button>
+    <button data-tab="entregas">🚚 Entregas (fluxo)</button>
     <button data-tab="tabela">📋 Tabela editável</button>
   </div>
 
@@ -315,6 +318,66 @@
     </div>
   </section>
 
+  <!-- PAGAMENTOS -->
+  <section id="tab-pagamentos" style="display:none">
+    <div class="tiles" id="pag-tiles"></div>
+    <div class="card">
+      <h2>Valor previsto de pagamento — por fornecedor</h2>
+      <p class="note">Calculado a partir da composição (aba Insumos) × a necessidade de produção de cada produto até fevereiro. Para cada componente: <b>a comprar = (produção necessária × qtd por unidade) − estoque do insumo</b>, e <b>valor = a comprar × custo unitário</b>. Preencha o custo e o estoque na aba Insumos para os valores aparecerem aqui. Só entram produtos com composição cadastrada.</p>
+      <div class="tbox">
+        <table id="tpag"><thead><tr>
+          <th class="l">Fornecedor / Componente</th>
+          <th class="l">Produtos</th>
+          <th>Qtd a comprar</th>
+          <th>Custo un (R$)</th>
+          <th>Valor previsto (R$)</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PEDIDOS -->
+  <section id="tab-pedidos" style="display:none">
+    <div class="card" style="border:2px solid var(--est)">
+      <h2>Novo pedido de insumo</h2>
+      <p class="note">Registre um pedido feito a um fornecedor. Ele aparece na aba <b>Entregas (fluxo)</b> como um cartão na etapa “Pedido realizado”, e você avança as etapas por lá. O destino é sugerido automaticamente (com silk → Millgraf; senão, a fábrica do produto), e você pode trocar.</p>
+      <div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr .8fr .8fr auto;align-items:end">
+        <label>Componente<input id="pd-comp" placeholder="ex: Frasco 140ml 24/410"></label>
+        <label>Fornecedor<input id="pd-forn" placeholder="ex: LudPack"></label>
+        <label>Produto (SKU)<input id="pd-sku" list="sku-list" placeholder="opcional"></label>
+        <label>Quantidade<input id="pd-qtd" type="number" min="0" step="1" placeholder="0"></label>
+        <label>Custo un (R$)<input id="pd-custo" type="number" min="0" step="0.01" placeholder="0,00"></label>
+        <button class="primary" id="pd-add">Lançar pedido</button>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;align-items:end;margin-top:10px">
+        <label>Data do pedido<input id="pd-data" type="date"></label>
+        <label>Previsão de entrega<input id="pd-prev" type="date"></label>
+        <label>Destino (onde entrega)<input id="pd-dest" placeholder="auto"></label>
+      </div>
+      <div id="pd-msg" class="hint"></div>
+    </div>
+    <div class="card">
+      <h2>Todos os pedidos</h2>
+      <div class="tools"><input id="busca-pd" placeholder="Buscar componente, fornecedor ou produto" style="min-width:240px"><span class="muted" id="cnt-pd" style="font-size:12.5px"></span></div>
+      <div class="tbox">
+        <table id="tpd"><thead><tr>
+          <th class="l">Componente</th><th class="l">Fornecedor</th><th class="l">Produto</th>
+          <th>Qtd</th><th>Custo un</th><th>Valor</th><th class="l">Pedido</th><th class="l">Previsão</th><th class="l">Destino</th><th>Recebido</th><th class="l">Etapa</th><th></th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ENTREGAS (KANBAN) -->
+  <section id="tab-entregas" style="display:none">
+    <div class="card">
+      <h2>Fluxo de entrega dos insumos</h2>
+      <p class="note">Cada cartão é um pedido. Avance pelas etapas com as setas: <b>Pedido realizado</b> → <b>Previsão de entrega</b> (a caminho do destino) → <b>Na empresa</b> (chegou e está disponível para a produção). Clique nos campos do cartão para editar. Componentes sem processo de silk têm só estas três etapas.</p>
+      <div class="tools"><input id="busca-en" placeholder="Buscar" style="min-width:200px"><span class="muted" id="cnt-en" style="font-size:12.5px"></span></div>
+    </div>
+    <div id="kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start"></div>
+  </section>
+
   <!-- TABELA -->
   <section id="tab-tabela" style="display:none">
     <div class="card">
@@ -355,10 +418,10 @@
 const SEED=JSON.parse(document.getElementById('seed').textContent);
 // Composição base da linha Camuflage 140ml (preserva no "Restaurar originais")
 const INSUMOS_CAMU140=[
-  {nome:'Frasco 140ml 24/410',tipo:'material',est:0,qtd:1,forn:'LudPack',obs:''},
-  {nome:'Pump 24/410 preta',tipo:'material',est:0,qtd:1,forn:'LeadPak / Valem',obs:''},
-  {nome:'Frasco com silk (serigrafia)',tipo:'processo',est:0,qtd:1,forn:'Millgraf',obs:'etapa seguinte ao frasco'},
-  {nome:'Cartucho',tipo:'material',est:0,qtd:1,forn:'CCS',obs:'arte por produto'}
+  {nome:'Frasco 140ml 24/410',tipo:'material',etapa:'Frasco',qtd:1,custo:0,est:0,forn:'LudPack',obs:''},
+  {nome:'Pump 24/410 preta',tipo:'material',etapa:'Pump',qtd:1,custo:0,est:0,forn:'LeadPak / Valem',obs:''},
+  {nome:'Frasco com silk (serigrafia)',tipo:'processo',etapa:'Silk',qtd:1,custo:0,est:0,forn:'Millgraf',obs:'etapa seguinte ao frasco'},
+  {nome:'Cartucho',tipo:'material',etapa:'Cartucho',qtd:1,custo:0,est:0,forn:'CCS',obs:'arte por produto'}
 ];
 ['CAMUMEDI140ML','CAMULIGHT140ML','CAMUPEARL140ML','CAMUGRAY140ML','CAMUCOOPER140ML','CAMUSILVER140ML'].forEach(sku=>{const r=SEED.find(x=>x.sku===sku); if(r&&!Array.isArray(r.insumos))r.insumos=INSUMOS_CAMU140.map(c=>({...c}));});
 const fmt=d3.format(','), pfmt=d3.format('+.0%');
@@ -379,7 +442,10 @@ const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"
 const SB_URL='https://hsqehrwvlkkuuvrszbzq.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzcWVocnd2bGtrdXV2cnN6YnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NjQzOTcsImV4cCI6MjA5NjM0MDM5N30.dF5XJi6mCoXh1vrsc_w8pZCHeEip4FPsTnW4PEpilv8';
 const TBL='painel_estoque';
+const TBLP='painel_pedidos';
 let sb=null, userName=localStorage.getItem('noue_user')||'';
+let pedidos=[]; let buscaPd='', buscaEn='';
+const ETAPAS=[['pedido','Pedido realizado'],['transito','Previsão de entrega'],['empresa','Na empresa']];
 const setStatus=m=>document.getElementById('status').textContent=m;
 const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null)r[k]=o[k];return r;};
 const FIELDS=['estoque','est_gru','est_ext','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
@@ -391,6 +457,24 @@ async function loadAll(){
   if(data&&data.length){ rows=data.map(r=>({...(r.data||{}),sku:r.sku})); }
   return true;
 }
+async function loadPedidos(){
+  const {data,error}=await sb.from(TBLP).select('id,data').order('updated_at',{ascending:false});
+  if(error)return; pedidos=(data||[]).map(r=>({...(r.data||{}),id:r.id}));
+}
+async function savePedido(p){
+  const row={id:p.id,data:{...p},updated_at:new Date().toISOString(),updated_by:userName||null}; delete row.data.id;
+  const i=pedidos.findIndex(x=>x.id===p.id); if(i>=0)pedidos[i]=p; else pedidos.unshift(p); render();
+  if(sb){ const {error}=await sb.from(TBLP).upsert(row,{onConflict:'id'}); if(error)setStatus('⚠️ Pedido não salvou: '+error.message); else setStatus('✅ Pedido salvo · '+hora()); }
+}
+async function delPedido(id){ pedidos=pedidos.filter(x=>x.id!==id); render(); if(sb){await sb.from(TBLP).delete().eq('id',id);} }
+function uuid(){ return (crypto.randomUUID?crypto.randomUUID():'id-'+Date.now()+'-'+Math.random().toString(36).slice(2,8)); }
+function pedValor(p){ return num(p.qtd)*num(p.custo); }
+function destinoSugerido(p){
+  const r=rows.find(x=>x.sku===p.sku);
+  const temSilk=/silk|serigraf/i.test(p.comp||'') || (r&&Array.isArray(r.insumos)&&r.insumos.some(c=>/silk|serigraf/i.test(c.nome||'')));
+  if(temSilk)return 'Millgraf (silk)';
+  return (r&&r.fab)?('Fábrica '+r.fab):'Fábrica';
+}
 async function boot(){
   const ron=document.getElementById('ronote');
   try{ sb=window.supabase.createClient(SB_URL,SB_KEY); }catch(e){ sb=null; }
@@ -399,12 +483,13 @@ async function boot(){
   const uWrap=document.getElementById('userwrap');
   if(uWrap){ const inp=document.getElementById('username'); inp.value=userName;
     inp.oninput=()=>{ userName=inp.value.trim(); localStorage.setItem('noue_user',userName); }; }
-  const ok=await loadAll();
+  const ok=await loadAll(); await loadPedidos();
   if(ok){ ron.style.display='none'; setStatus('✅ Conectado ao banco da Nouê — tudo que você editar fica salvo e aparece ao vivo para a equipe · '+hora()); }
   render();
   // Tempo real: qualquer alteração de qualquer pessoa recarrega o painel
   try{
     sb.channel('painel_rt').on('postgres_changes',{event:'*',schema:'public',table:TBL},async()=>{ await loadAll(); setStatus('✅ Sincronizado com a equipe · '+hora()); render(); }).subscribe();
+    sb.channel('pedidos_rt').on('postgres_changes',{event:'*',schema:'public',table:TBLP},async()=>{ await loadPedidos(); render(); }).subscribe();
   }catch(e){}
 }
 async function saveRow(d){
@@ -468,6 +553,9 @@ function render(){
   if(tab==='producao')drawProd(data);
   if(tab==='compras')drawCompras(data);
   if(tab==='insumos')drawInsumos(data);
+  if(tab==='pagamentos')drawPagamentos(data);
+  if(tab==='pedidos')drawPedidos(data);
+  if(tab==='entregas')drawEntregas(data);
   if(tab==='tabela')drawTable(data);
 }
 
@@ -699,9 +787,9 @@ function insAdd(sku,tipo){ const r=rows.find(x=>x.sku===sku); if(!r)return; cons
 function insDel(sku,i){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).slice(); arr.splice(i,1); saveIns(sku,arr); }
 function insSet(sku,i,k,v){ const r=rows.find(x=>x.sku===sku); if(!r)return; const arr=insArr(r).map(x=>({...x})); if(!arr[i])return; arr[i][k]=v; saveIns(sku,arr); }
 function insCopy(fromSku,toSku){ const f=rows.find(x=>x.sku===fromSku); if(!f)return; const arr=insArr(f).map(x=>({...x})); saveIns(toSku,arr); }
-function insCellEdit(td,sku,i,k,isNum){
+function insCellEdit(td,sku,i,k,isNum,isDec){
   if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
-  const inp=document.createElement('input'); inp.type=isNum?'number':'text'; if(isNum){inp.min=0;inp.step=1;}
+  const inp=document.createElement('input'); inp.type=isNum?'number':'text'; if(isNum){inp.min=0;inp.step=isDec?0.01:1;}
   const cur=insArr(rows.find(x=>x.sku===sku))[i]||{}; inp.value=isNum?num(cur[k]):(cur[k]||'');
   if(!isNum)inp.style.width='210px'; td.appendChild(inp); inp.focus(); inp.select();
   const done=sv=>{ cellEdit=null; if(sv){ insSet(sku,i,k,isNum?num(inp.value):inp.value); } else render(); };
@@ -726,7 +814,7 @@ function drawInsumos(data){
     const card=document.createElement('div'); card.style.cssText='border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--panel)';
     // header
     const hd=document.createElement('div'); hd.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px';
-    hd.innerHTML=`<div><b style="font-size:15px">${r.produto||r.sku}</b> <span class="muted" style="font-size:11.5px">· ${r.sku} · curva ${r.curva||'-'}</span></div>`;
+    hd.innerHTML=`<div><b style="font-size:15px">${r.produto||r.sku}</b> <span class="muted" style="font-size:11.5px">· ${r.sku} · curva ${r.curva||'-'}${r.fab?(' · fábrica '+r.fab):''}</span></div>`;
     const btns=document.createElement('div'); btns.style.cssText='display:flex;gap:6px;flex-wrap:wrap';
     const bMat=document.createElement('button'); bMat.className='mini'; bMat.textContent='+ material'; bMat.onclick=()=>insAdd(r.sku,'material');
     const bPro=document.createElement('button'); bPro.className='mini'; bPro.textContent='+ processo'; bPro.onclick=()=>insAdd(r.sku,'processo');
@@ -736,14 +824,16 @@ function drawInsumos(data){
     btns.append(bMat,bPro,sel); hd.appendChild(btns); card.appendChild(hd);
     if(!arr.length){ const e=document.createElement('div'); e.className='muted'; e.style.fontSize='12.5px'; e.textContent='Sem componentes. Use “+ material” / “+ processo” ou copie de outro produto.'; card.appendChild(e); wrap.appendChild(card); continue; }
     // table
-    const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th class="l">Componente</th><th>Tipo</th><th>Estoque insumo</th><th>Qtd/un</th><th class="l">Fornecedor</th><th class="l">Obs</th><th></th></tr></thead>';
+    const tbl=document.createElement('table'); tbl.innerHTML='<thead><tr><th class="l">Componente</th><th class="l">Etapa</th><th>Tipo</th><th>Qtd/un</th><th>Custo un (R$)</th><th>Estoque insumo</th><th class="l">Fornecedor</th><th class="l">Obs</th><th></th></tr></thead>';
     const tb=document.createElement('tbody');
     arr.forEach((c,i)=>{
       const tr=document.createElement('tr');
       const tdN=document.createElement('td');tdN.className='l edit-cell';tdN.textContent=c.nome||'—';if(!c.nome)tdN.style.color='var(--muted)';tdN.onclick=()=>insCellEdit(tdN,r.sku,i,'nome',false);tr.appendChild(tdN);
+      const tdEt=document.createElement('td');tdEt.className='l edit-cell';tdEt.textContent=c.etapa||'—';if(!c.etapa)tdEt.style.color='var(--muted)';tdEt.onclick=()=>insCellEdit(tdEt,r.sku,i,'etapa',false);tr.appendChild(tdEt);
       const tdT=document.createElement('td');const isPro=(c.tipo==='processo');const pill=document.createElement('span');pill.className='pill';pill.style.cursor='pointer';pill.textContent=isPro?'Processo':'Material';pill.style.color=isPro?'var(--fat)':'var(--est)';pill.style.borderColor=isPro?'var(--fat)':'var(--est)';pill.onclick=()=>insSet(r.sku,i,'tipo',isPro?'material':'processo');tdT.appendChild(pill);tr.appendChild(tdT);
-      const tdE=document.createElement('td');tdE.className='edit-cell';tdE.textContent=fmt(num(c.est));tdE.onclick=()=>insCellEdit(tdE,r.sku,i,'est',true);tr.appendChild(tdE);
       const tdQ=document.createElement('td');tdQ.className='edit-cell';tdQ.textContent=num(c.qtd)||1;tdQ.onclick=()=>insCellEdit(tdQ,r.sku,i,'qtd',true);tr.appendChild(tdQ);
+      const tdCu=document.createElement('td');tdCu.className='edit-cell';tdCu.textContent=num(c.custo).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});tdCu.onclick=()=>insCellEdit(tdCu,r.sku,i,'custo',true,true);tr.appendChild(tdCu);
+      const tdE=document.createElement('td');tdE.className='edit-cell';tdE.textContent=fmt(num(c.est));tdE.onclick=()=>insCellEdit(tdE,r.sku,i,'est',true);tr.appendChild(tdE);
       const tdF=document.createElement('td');tdF.className='l edit-cell';tdF.textContent=c.forn||'—';if(!c.forn)tdF.style.color='var(--muted)';tdF.onclick=()=>insCellEdit(tdF,r.sku,i,'forn',false);tr.appendChild(tdF);
       const tdO=document.createElement('td');tdO.className='l edit-cell';tdO.textContent=c.obs||'—';if(!c.obs)tdO.style.color='var(--muted)';tdO.onclick=()=>insCellEdit(tdO,r.sku,i,'obs',false);tr.appendChild(tdO);
       const tdX=document.createElement('td');const x=document.createElement('button');x.className='mini danger';x.textContent='×';x.title='remover';x.onclick=()=>{if(confirm('Remover '+(c.nome||'componente')+'?'))insDel(r.sku,i);};tdX.appendChild(x);tr.appendChild(tdX);
@@ -751,6 +841,102 @@ function drawInsumos(data){
     });
     tbl.appendChild(tb); card.appendChild(tbl); wrap.appendChild(card);
   }
+}
+
+/* ---- pagamentos previstos ---- */
+function compNeed(r,c){ const base=num(r.prodTot)||0; return Math.round(base*(num(c.qtd)||1)); }
+function pagRows(data){
+  const out=[];
+  for(const r of data){ const arr=insArr(r); for(const c of arr){ if(!(num(c.custo)>0))continue;
+    const need=compNeed(r,c); const aComprar=Math.max(0,need-num(c.est)); if(aComprar<=0&&num(c.est)>0&&need>0){} 
+    out.push({forn:c.forn||'(sem fornecedor)',comp:c.nome||'(componente)',sku:r.sku,produto:r.produto||r.sku,aComprar,custo:num(c.custo),valor:aComprar*num(c.custo)});
+  }}
+  return out;
+}
+function drawPagamentos(data){
+  const pr=pagRows(data);
+  const byForn={}; pr.forEach(x=>{ (byForn[x.forn]=byForn[x.forn]||[]).push(x); });
+  const totGeral=d3.sum(pr,x=>x.valor);
+  const fornTot=Object.entries(byForn).map(([f,arr])=>[f,d3.sum(arr,x=>x.valor)]).sort((a,b)=>b[1]-a[1]);
+  const tiles=document.getElementById('pag-tiles');
+  tiles.innerHTML=`<div class="tile" style="--tc:var(--fat)"><div class="lbl">Total previsto a pagar</div><div class="big">${brl(totGeral)}</div><div class="s">componentes a comprar × custo</div></div>`+
+    fornTot.slice(0,4).map(([f,v])=>`<div class="tile" style="--tc:var(--out)"><div class="lbl">${f}</div><div class="big">${brl(v)}</div><div class="s">previsto</div></div>`).join('');
+  const tb=document.querySelector('#tpag tbody'); tb.innerHTML='';
+  if(!pr.length){ tb.innerHTML='<tr><td colspan="5" class="muted" style="padding:12px">Nenhum componente com custo cadastrado ainda. Preencha o custo na aba Insumos.</td></tr>'; return; }
+  for(const [f,v] of fornTot){
+    const trH=document.createElement('tr'); trH.style.background='var(--hl)';
+    trH.innerHTML=`<td class="l" colspan="4" style="font-weight:700">${f}</td><td style="font-weight:700;color:var(--fat)">${brl(v)}</td>`; tb.appendChild(trH);
+    byForn[f].sort((a,b)=>b.valor-a.valor).forEach(x=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td class="l" style="padding-left:18px">${x.comp}</td><td class="l muted">${x.produto}</td><td>${fmt(x.aComprar)}</td><td>${x.custo.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td><td>${brl(x.valor)}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+}
+
+/* ---- pedidos (lista) ---- */
+function pedList(){ return pedidos.filter(p=>!buscaPd||((p.comp||'')+' '+(p.forn||'')+' '+(p.produto||'')+' '+(p.sku||'')).toLowerCase().includes(buscaPd)); }
+function drawPedidos(data){
+  const tb=document.querySelector('#tpd tbody'); tb.innerHTML='';
+  const lst=pedList();
+  document.getElementById('cnt-pd').textContent=`${lst.length} pedidos`;
+  if(!lst.length){ tb.innerHTML='<tr><td colspan="12" class="muted" style="padding:12px">Nenhum pedido ainda. Lance o primeiro no formulário acima.</td></tr>'; return; }
+  for(const p of lst){
+    const tr=document.createElement('tr');
+    const et=(ETAPAS.find(e=>e[0]===p.etapa)||ETAPAS[0])[1];
+    mkCell(tr,p,'comp',false,'l'); mkCell(tr,p,'forn',false,'l'); 
+    const tdPr=document.createElement('td');tdPr.className='l muted';tdPr.textContent=p.produto||p.sku||'—';tr.appendChild(tdPr);
+    mkCell(tr,p,'qtd',true); mkCell(tr,p,'custo',true,'',true);
+    const tdV=document.createElement('td');tdV.textContent=brl(pedValor(p));tdV.style.color='var(--fat)';tr.appendChild(tdV);
+    mkCell(tr,p,'data',false,'l'); mkCell(tr,p,'prev',false,'l'); mkCell(tr,p,'dest',false,'l'); mkCell(tr,p,'recebido',true);
+    const tdE=document.createElement('td');tdE.className='l';tdE.innerHTML=`<span class="pill">${et}</span>`;tr.appendChild(tdE);
+    const tdX=document.createElement('td');const x=document.createElement('button');x.className='mini danger';x.textContent='×';x.onclick=()=>{if(confirm('Remover pedido?'))delPedido(p.id);};tdX.appendChild(x);tr.appendChild(tdX);
+    tb.appendChild(tr);
+  }
+}
+function mkCell(tr,p,k,isNum,cls,isDec){
+  const td=document.createElement('td'); td.className=(cls||'')+' edit-cell';
+  const v=p[k];
+  td.textContent=(v===undefined||v===null||v==='')?'—':(isNum?fmt(num(v)):v); if(td.textContent==='—')td.style.color='var(--muted)';
+  td.onclick=()=>pedCellEdit(td,p,k,isNum,isDec); tr.appendChild(td);
+}
+function pedCellEdit(td,p,k,isNum,isDec){
+  if(cellEdit)return; cellEdit=true; const old=td.textContent; td.textContent='';
+  const inp=document.createElement('input'); inp.type=isNum?'number':(/^(data|prev)$/.test(k)?'date':'text'); if(isNum){inp.min=0;inp.step=isDec?0.01:1;}
+  inp.value=isNum?num(p[k]):(p[k]||''); if(inp.type==='text')inp.style.width='150px'; td.appendChild(inp); inp.focus(); inp.select&&inp.select();
+  const done=sv=>{ cellEdit=null; if(sv){ savePedido({...p,[k]:isNum?num(inp.value):inp.value}); } else render(); };
+  inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
+}
+
+/* ---- entregas (kanban) ---- */
+function drawEntregas(data){
+  const box=document.getElementById('kanban'); box.innerHTML='';
+  const lst=pedidos.filter(p=>!buscaEn||((p.comp||'')+' '+(p.forn||'')+' '+(p.produto||'')+' '+(p.dest||'')).toLowerCase().includes(buscaEn));
+  document.getElementById('cnt-en').textContent=`${lst.length} pedidos`;
+  const colVar={pedido:'--out',transito:'--dez',empresa:'--est'};
+  ETAPAS.forEach(([ek,elabel],ci)=>{
+    const col=document.createElement('div'); col.style.cssText=`background:var(--hl);border:1px solid var(--line);border-radius:12px;padding:10px;min-height:120px`;
+    const items=lst.filter(p=>(p.etapa||'pedido')===ek);
+    col.innerHTML=`<div style="font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center"><span><span class="dot" style="background:var(${colVar[ek]})"></span>${elabel}</span><span class="muted" style="font-size:12px">${items.length}</span></div>`;
+    if(!items.length){ const e=document.createElement('div');e.className='muted';e.style.cssText='font-size:12px;padding:6px';e.textContent='—';col.appendChild(e); }
+    items.forEach(p=>{
+      const card=document.createElement('div'); card.style.cssText='background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-bottom:8px';
+      const val=pedValor(p);
+      card.innerHTML=`<div style="font-weight:600;font-size:13px">${p.comp||'(componente)'}</div>
+        <div class="muted" style="font-size:11.5px;margin-top:2px">${p.forn||'—'}${p.produto?(' · '+p.produto):''}</div>
+        <div style="font-size:11.5px;margin-top:4px">Qtd <b>${fmt(num(p.qtd))}</b>${val?(' · '+brl(val)):''}</div>
+        <div style="font-size:11.5px;margin-top:2px">📍 ${p.dest||destinoSugerido(p)}</div>
+        ${ek==='pedido'&&p.data?`<div class="muted" style="font-size:11px;margin-top:2px">pedido ${p.data}</div>`:''}
+        ${ek==='transito'&&p.prev?`<div class="muted" style="font-size:11px;margin-top:2px">previsão ${p.prev}</div>`:''}
+        ${ek==='empresa'?`<div class="muted" style="font-size:11px;margin-top:2px">recebido ${fmt(num(p.recebido))}</div>`:''}`;
+      const nav=document.createElement('div'); nav.style.cssText='display:flex;gap:6px;margin-top:8px';
+      if(ci>0){ const b=document.createElement('button');b.className='mini';b.textContent='←';b.title='voltar etapa';b.onclick=()=>savePedido({...p,etapa:ETAPAS[ci-1][0]});nav.appendChild(b); }
+      const sp=document.createElement('span');sp.style.flex='1';nav.appendChild(sp);
+      if(ci<ETAPAS.length-1){ const b=document.createElement('button');b.className='mini primary';b.textContent=ETAPAS[ci+1][1]+' →';b.onclick=()=>savePedido({...p,etapa:ETAPAS[ci+1][0]});nav.appendChild(b); }
+      card.appendChild(nav); col.appendChild(card);
+    });
+    box.appendChild(col);
+  });
 }
 
 /* ---- tabela ---- */
@@ -852,7 +1038,7 @@ document.getElementById('btn-add-blank').onclick=()=>{ const sku=prompt('Código
   saveRow({sku:sku.trim(),produto:sku.trim(),curva:'C',cls:'',estoque:0,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); busca=sku.toLowerCase(); document.getElementById('busca').value=sku; tab='tabela'; switchTab(); };
 
 /* ---- tabs/controls ---- */
-function switchTab(){ ['geral','vendas','estoque','producao','compras','insumos','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
+function switchTab(){ ['geral','vendas','estoque','producao','compras','insumos','pagamentos','pedidos','entregas','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab)); render(); }
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
 document.querySelectorAll('#tb th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKey===k)sortAsc=!sortAsc;else{sortKey=k;sortAsc=['sku','produto','curva'].includes(k);}render();});
@@ -868,6 +1054,23 @@ document.getElementById('compras-filter').onchange=e=>{comprasFilter=e.target.va
 document.querySelectorAll('#te th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyE===k)sortAscE=!sortAscE;else{sortKeyE=k;sortAscE=['produto','curva'].includes(k);}render();});
 document.getElementById('busca-e').oninput=e=>{buscaE=e.target.value.toLowerCase();render();};
 document.getElementById('busca-i').oninput=e=>{buscaI=e.target.value.toLowerCase();render();};
+document.getElementById('busca-pd').oninput=e=>{buscaPd=e.target.value.toLowerCase();render();};
+document.getElementById('busca-en').oninput=e=>{buscaEn=e.target.value.toLowerCase();render();};
+(function(){ const d=document.getElementById('pd-data'); if(d)d.value=todayISO; })();
+document.getElementById('pd-add').onclick=()=>{
+  const comp=document.getElementById('pd-comp').value.trim();
+  if(!comp){document.getElementById('pd-msg').textContent='Informe ao menos o componente.';return;}
+  const p={ id:uuid(), comp, forn:document.getElementById('pd-forn').value.trim(),
+    sku:document.getElementById('pd-sku').value.trim(),
+    qtd:num(document.getElementById('pd-qtd').value), custo:num(document.getElementById('pd-custo').value),
+    data:document.getElementById('pd-data').value, prev:document.getElementById('pd-prev').value,
+    dest:document.getElementById('pd-dest').value.trim(), recebido:0, etapa:'pedido', obs:'' };
+  if(p.sku){ const r=rows.find(x=>x.sku.toLowerCase()===p.sku.toLowerCase()); if(r){p.sku=r.sku;p.produto=r.produto||r.sku;} }
+  if(!p.dest)p.dest=destinoSugerido(p);
+  savePedido(p);
+  ['pd-comp','pd-forn','pd-sku','pd-qtd','pd-custo','pd-prev','pd-dest'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pd-msg').textContent='Pedido lançado na etapa “Pedido realizado”. Veja na aba Entregas (fluxo).';
+};
 document.getElementById('chart-n').oninput=()=>drawChart(enrich());
 document.getElementById('btn-reset').onclick=resetAll;
 const tbtn=document.getElementById('themebtn');
