@@ -182,6 +182,7 @@
       <div class="tile" style="--tc:var(--est)"><div class="lbl">Estoque total</div><div class="big" id="te-tot">—</div><div class="s">Guarulhos + Extrema</div></div>
       <div class="tile" style="--tc:var(--out)"><div class="lbl">Guarulhos (SP · B2B)</div><div class="big" id="te-gru">—</div><div class="s">CD TPL Guarulhos</div></div>
       <div class="tile" style="--tc:var(--dez)"><div class="lbl">Extrema (MG · B2C)</div><div class="big" id="te-ext">—</div><div class="s">CD TPL Extrema</div></div>
+      <div class="tile" style="--tc:var(--muted)"><div class="lbl">📅 Última atualização</div><div class="big" id="te-upd" style="font-size:16px">—</div><div class="s" id="te-upd-by"></div></div>
     </div>
     <div class="card" style="border:2px solid var(--est)">
       <h2>📤 Atualizar estoque do dia — uma planilha por CD</h2>
@@ -512,11 +513,17 @@ const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null)r[k
 const FIELDS=['estoque','est_gru','est_ext','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
 const hora=()=>new Date().toLocaleTimeString('pt-BR').slice(0,5);
 
+let estoqueUpd=null;
 async function loadAll(){
   const {data,error}=await sb.from(TBL).select('sku,data').order('sku');
   if(error){ setStatus('⚠️ Erro ao carregar do banco: '+error.message); return false; }
   if(data&&data.length){ rows=data.map(r=>({...(r.data||{}),sku:r.sku})); }
+  try{ const m=await sb.from('painel_estoque_meta').select('v').eq('k','estoque_update').maybeSingle(); if(m&&m.data&&m.data.v)estoqueUpd=m.data.v; }catch(e){}
   return true;
+}
+async function marcarEstoqueAtualizado(){
+  estoqueUpd={at:new Date().toISOString(),by:userName||''};
+  if(sb){ try{ await sb.from('painel_estoque_meta').upsert({k:'estoque_update',v:estoqueUpd,updated_at:estoqueUpd.at},{onConflict:'k'}); }catch(e){} }
 }
 async function loadPedidos(){
   const {data,error}=await sb.from(TBLP).select('id,data').order('updated_at',{ascending:false});
@@ -711,6 +718,9 @@ function drawEstoque(data){
   document.getElementById('te-tot').textContent=cfmt.format(d3.sum(data,r=>num(r.estoque)));
   document.getElementById('te-gru').textContent=anySplit?cfmt.format(d3.sum(data,r=>num(r.est_gru))):'—';
   document.getElementById('te-ext').textContent=anySplit?cfmt.format(d3.sum(data,r=>num(r.est_ext))):'—';
+  const tuEl=document.getElementById('te-upd'), tbyEl=document.getElementById('te-upd-by');
+  if(estoqueUpd&&estoqueUpd.at){ const dt=new Date(estoqueUpd.at); tuEl.textContent=dt.toLocaleDateString('pt-BR')+' '+dt.toLocaleTimeString('pt-BR').slice(0,5); tbyEl.textContent=estoqueUpd.by?('por '+estoqueUpd.by):''; }
+  else{ tuEl.textContent='—'; tbyEl.textContent='ainda não atualizado'; }
   let d=data.filter(r=>!buscaE||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaE));
   d.sort((a,b)=>{let av=a[sortKeyE],bv=b[sortKeyE]; const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscE?c:-c;});
   const tb=document.querySelector('#te tbody'); tb.innerHTML='';
@@ -733,7 +743,7 @@ function startEstoqueCell(td,r,k){
   td.appendChild(inp); inp.focus(); inp.select();
   const done=sv=>{ cellEdit=null; if(sv){ const upd={...r,[k]:num(inp.value)};
       upd.estoque=num(upd.est_gru)+num(upd.est_ext); // total = Guarulhos + Extrema
-      saveRow(upd); } else render(); };
+      saveRow(upd); marcarEstoqueAtualizado(); } else render(); };
   inp.onblur=()=>done(true); inp.onkeydown=e=>{ if(e.key==='Enter'){inp.blur();} else if(e.key==='Escape'){cellEdit=null;td.textContent=old;} };
 }
 
@@ -1106,6 +1116,7 @@ document.getElementById('btn-csv').onclick=async()=>{
       saveRow({sku,produto:sku,curva:'C',cls:'',est_gru:gg,est_ext:ee,estoque:gg+ee,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); crd++;
     }
   }
+  await marcarEstoqueAtualizado();
   const parts=[]; if(fg)parts.push('Guarulhos: '+g.lidas+' linhas'); if(fe)parts.push('Extrema: '+e.lidas+' linhas');
   document.getElementById('csv-msg').textContent=`${parts.join(' · ')} · ${upd} SKUs atualizados${crd?` · ${crd} novos`:''}.`;
   document.getElementById('csv-hist').textContent='Última atualização de estoque: '+new Date().toLocaleString('pt-BR');
