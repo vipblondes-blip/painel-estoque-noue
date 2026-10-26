@@ -106,6 +106,7 @@
     <button data-tab="estoque">📦 Estoque &amp; chegadas</button>
     <button data-tab="producao">🏭 Calendário de produção</button>
     <button data-tab="compras">🛒 Calendário de compras</button>
+    <button data-tab="blackfriday">🖤 Black Friday</button>
     <button data-tab="tabela">📋 Tabela editável</button>
     <button id="open-sup" class="suplaunch">🔒 Área de Suprimentos / Insumos</button>
   </div>
@@ -408,6 +409,40 @@
     <div id="kanban" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;align-items:start"></div>
   </section>
 
+  <!-- BLACK FRIDAY -->
+  <section id="tab-blackfriday" style="display:none">
+    <div class="tiles" id="bf-tiles"></div>
+    <div class="card">
+      <h2>Black Friday 2026 — qual cenário conseguimos atingir, por produto</h2>
+      <p class="note">Projeção BF = demanda de <b>novembro</b> do plano. Disponível = estoque atual + chegadas até 30/10. O cenário atingível compara o disponível com a meta: <b>Otimista</b> e <b>Conservador</b> são a meta ± a folga que você define abaixo. Meta da empresa para a Black: <b>R$ 25 mi</b>.</p>
+      <div class="tools">
+        <label style="font-size:12.5px;color:var(--muted)">Conservador (% da meta) <input id="bf-cons" type="number" min="10" max="100" value="70" style="width:70px"></label>
+        <label style="font-size:12.5px;color:var(--muted)">Otimista (% da meta) <input id="bf-otim" type="number" min="100" max="300" value="130" style="width:70px"></label>
+        <span style="flex:1"></span>
+        <input id="busca-bf" placeholder="Buscar SKU ou produto" style="min-width:200px">
+        <span class="muted" id="cnt-bf" style="font-size:12.5px"></span>
+      </div>
+      <div class="legend">
+        <span style="--sw:var(--ok)">Coberto (bate a meta)</span>
+        <span style="--sw:var(--warn)">Apertado (entre conservador e meta)</span>
+        <span style="--sw:var(--bad)">Em risco (abaixo do conservador)</span>
+      </div>
+      <div class="tbox">
+        <table id="tbf"><thead><tr>
+          <th class="l" data-k="produto">Produto</th>
+          <th data-k="curva">Curva</th>
+          <th data-k="meta">Projeção BF (un)</th>
+          <th data-k="fat">Faturam. BF (R$)</th>
+          <th data-k="disp">Disponível</th>
+          <th data-k="pct">% da meta</th>
+          <th class="l" data-k="cenario">Cenário atingível</th>
+          <th data-k="falta">Falta p/ meta</th>
+          <th>Status</th>
+        </tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
   <!-- TABELA -->
   <section id="tab-tabela" style="display:none">
     <div class="card">
@@ -498,6 +533,9 @@ let sortKeyP='prodTot', sortAscP=false, buscaP='', prodFilter='prod';
 let sortKeyC='faltaComprar', sortAscC=false, buscaC='', comprasFilter='comprar';
 let sortKeyE='estoque', sortAscE=false, buscaE='';
 let buscaI='', insumosFilter='all';
+let buscaBF='', sortKeyBF='fat', sortAscBF=false;
+let bfCons=num(localStorage.getItem('bf_cons'))||70, bfOtim=num(localStorage.getItem('bf_otim'))||130;
+const BF_META_RS=25000000;
 const COMPRAS={"CAMUTOUCHCE":{"plano":19750,"status":"Bate"},"CAMUPEARL140ML":{"plano":22000,"status":"Plano acima do necessário"},"CAMUTOUCHECC":{"plano":11200,"status":"Bate"},"CAMUTOUCH":{"plano":10450,"status":"Bate"},"MELANOREATIV":{"plano":1200,"status":"ROMPE com o plano"},"COULEURSPEROLA140ML":{"plano":2000,"status":"ROMPE com o plano"},"CAMUTOUCHLE":{"plano":5950,"status":"Bate"},"CAMUTOUCHLC":{"plano":2650,"status":"Plano acima do necessário"},"Shampoocamuflage1litro":{"plano":0,"status":"Sem demanda"},"F9GTJD8XSP":{"plano":0,"status":"Sem demanda"},"OLEOREGENER30ML":{"plano":0,"status":"Sem demanda"},"SHAMPOOREGENER250ML":{"plano":0,"status":"Sem demanda"},"CAMUMEDI140ML":{"plano":300000,"status":"Bate"},"CAMUMEDI1L":{"plano":2300,"status":"Plano acima do necessário"},"10OXIGENADAOX900ML":{"plano":6000,"status":"Bate"},"NOVOSHAMPOOCAMUFLAGE1LITRO":{"plano":10000,"status":"Plano acima do necessário"},"NOVOSHAMPOONOUE140ML":{"plano":50000,"status":"ROMPE com o plano"},"CAMUCOOPER140ML":{"plano":5000,"status":"Bate"},"COULEURSCHOCOLAT140ML":{"plano":2500,"status":"Bate"},"CAMULIGHT140ML":{"plano":100000,"status":"Bate"},"COLGLOW60G":{"plano":25000,"status":"Plano acima do necessário"},"MASCARACAMU150G":{"plano":20000,"status":"Plano acima do necessário"},"SHAMPOOPRECAMU140ML":{"plano":25000,"status":"Plano acima do necessário"},"SPRAYREGENERNV200ML":{"plano":10000,"status":"Plano acima do necessário"},"COLGLOWINTENSE60G":{"plano":0,"status":"Bate"},"CAMULIGHT1L":{"plano":2000,"status":"Bate"},"OLEOREGENER30ML2":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSMANTEIGA140ML":{"plano":0,"status":"Bate"},"CAMUGRAY140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSAVELA140ML":{"plano":0,"status":"Bate"},"MASCARAREGENER250G":{"plano":4000,"status":"Plano acima do necessário"},"PERFUMERENEGER50ML":{"plano":10000,"status":"Plano acima do necessário"},"COULEURSDOCE140ML":{"plano":0,"status":"Bate"},"CAMUSILVER140ML":{"plano":5000,"status":"Plano acima do necessário"},"COULEURSMEL140ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER250MLNOVO":{"plano":4000,"status":"Bate"},"KITRAPIDOGLOW":{"plano":0,"status":"Bate"},"COULEURSCANNELLE140ML":{"plano":2500,"status":"Bate"},"MASCARAREGENER500G":{"plano":1000,"status":"Bate"},"COULEURSCUIVRE140ML":{"plano":2500,"status":"Bate"},"MASCARAFORTIFYE500G":{"plano":1000,"status":"Bate"},"SERUMREGENERADOR":{"plano":2500,"status":"Plano acima do necessário"},"COULEURSPEROLA500ML":{"plano":0,"status":"Bate"},"CAMUPEARL1L":{"plano":0,"status":"Bate"},"PERFUMEFORTIFYE50ML":{"plano":0,"status":"Bate"},"COULEURSMANTEIGA500ML":{"plano":0,"status":"Bate"},"SHAMPOOREGENER1L":{"plano":500,"status":"Bate"},"OLEOFORTIFYE30ML":{"plano":0,"status":"Bate"},"GELFORTIFYE250ML":{"plano":1000,"status":"Bate"},"MASCARASILVERY500G":{"plano":0,"status":"Bate"},"LEAVEINFORTIFYE200ML":{"plano":0,"status":"Bate"},"COULEURSAVELA500ML":{"plano":0,"status":"Bate"},"MASCARAFORTIFYE250G":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE250ML":{"plano":1000,"status":"Bate"},"COULEURSDOCE500ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY250ML":{"plano":0,"status":"Bate"},"LUMIERE500G":{"plano":0,"status":"Bate"},"MASCARASILVERY300G":{"plano":0,"status":"Bate"},"COULEURSMEL500ML":{"plano":0,"status":"Bate"},"SHAMPOOFORTIFYE1L":{"plano":0,"status":"Bate"},"10OXIGENADA120ML":{"plano":0,"status":"Bate"},"SHAMPOOSILVERY1L":{"plano":0,"status":"Bate"},"20OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"GELFORTIFYE1L":{"plano":0,"status":"Bate"},"30OXIGENADAOX900ML":{"plano":0,"status":"Bate"},"PROTEINE1L":{"plano":0,"status":"Bate"}};
 
 /* ---- persistência: Supabase (banco próprio da Nouê) ---- */
@@ -627,6 +665,7 @@ function render(){
   if(tab==='geral')drawRisk(data);
   if(tab==='vendas'){drawVendas(data);drawFat(data);}
   if(tab==='estoque'){ drawEstoque(data); drawChart(data); }
+  if(tab==='blackfriday')drawBF(data);
   if(tab==='producao')drawProd(data);
   if(tab==='compras')drawCompras(data);
   if(tab==='insumos')drawInsumos(data);
@@ -1037,6 +1076,59 @@ function drawEntregas(data){
   });
 }
 
+/* ---- Black Friday ---- */
+function bfRows(data){
+  const cons=bfCons/100, otim=bfOtim/100;
+  return data.map(r=>{
+    const meta=num(r.d_nov); const disp=num(r.estoque)+num(r.chega_out);
+    const fat=meta*num(r.preco); const pct=meta>0?disp/meta:(disp>0?1:0);
+    const vCons=meta*cons, vOtim=meta*otim;
+    let cenario,sit,stl;
+    if(meta<=0){ cenario='—'; sit=''; stl='—'; }
+    else if(disp>=vOtim){ cenario='Otimista (+'+(bfOtim-100)+'%)'; sit='ok'; stl='Coberto'; }
+    else if(disp>=meta){ cenario='Meta cheia'; sit='ok'; stl='Coberto'; }
+    else if(disp>=vCons){ cenario='Conservador ('+bfCons+'%)'; sit='warn'; stl='Apertado'; }
+    else { cenario='Abaixo do conservador'; sit='bad'; stl='Em risco'; }
+    const falta=Math.max(0,Math.round(meta-disp));
+    return {...r,meta:Math.round(meta),disp,fat,pct,cenario,sit,stl,falta};
+  });
+}
+function drawBF(data){
+  const d0=bfRows(data);
+  const totMeta=d3.sum(d0,x=>x.meta), totFat=d3.sum(d0,x=>x.fat), totDisp=d3.sum(d0,x=>x.disp);
+  const coberto=d0.filter(x=>x.meta>0&&x.disp>=x.meta).length;
+  const risco=d0.filter(x=>x.meta>0&&x.sit==='bad').length;
+  const faltaFat=d3.sum(d0,x=>x.falta*num(x.preco));
+  document.getElementById('bf-tiles').innerHTML=[
+    ['Projeção BF (un)',cfmt.format(totMeta),'demanda de novembro','var(--out)'],
+    ['Faturamento BF projetado',brl(totFat),'projeção × preço','var(--fat)'],
+    ['Meta da empresa (BF)','R$ 25 mi',(totFat?Math.round(totFat/BF_META_RS*100):0)+'% coberto pela projeção','var(--nec)'],
+    ['Disponível p/ a Black',cfmt.format(totDisp),'estoque + chegadas','var(--est)'],
+    ['Produtos que batem a meta',coberto+' / '+d0.filter(x=>x.meta>0).length,'cenário meta ou melhor','var(--ok)'],
+    ['Produtos em risco',risco,'abaixo do conservador','var(--bad)'],
+    ['Falta faturar (gap)',brl(faltaFat),'por ruptura de estoque','var(--bad)']
+  ].map(([l,v,s,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">${l}</div><div class="big">${v}</div><div class="s">${s}</div></div>`).join('');
+  let d=d0.filter(r=>!buscaBF||(r.sku+' '+(r.produto||'')).toLowerCase().includes(buscaBF));
+  d.sort((a,b)=>{let av,bv; if(sortKeyBF==='cenario'){av=a.pct;bv=b.pct;} else {av=a[sortKeyBF];bv=b[sortKeyBF];}
+    const an=Number(av),bn=Number(bv); const c=(!isNaN(an)&&!isNaN(bn)&&av!==''&&bv!=='')?an-bn:String(av).localeCompare(String(bv)); return sortAscBF?c:-c;});
+  const tb=document.querySelector('#tbf tbody'); tb.innerHTML='';
+  for(const r of d){ if(r.meta<=0&&r.disp<=0)continue;
+    const tr=document.createElement('tr');
+    const pctTxt=Math.round(r.pct*100)+'%';
+    tr.innerHTML=`<td class="l">${r.produto||r.sku}<div class="muted" style="font-size:11px">${r.sku}</div></td>
+      <td>${r.curva||'-'}</td>
+      <td style="font-weight:600">${fmt(r.meta)}</td>
+      <td style="color:var(--fat)">${brl(r.fat)}</td>
+      <td>${fmt(r.disp)}</td>
+      <td style="font-weight:600;color:${r.sit==='bad'?'var(--bad)':r.sit==='warn'?'var(--warn)':'var(--ok)'}">${pctTxt}</td>
+      <td class="l">${r.cenario}</td>
+      <td style="color:${r.falta>0?'var(--bad)':'var(--muted)'}">${r.falta>0?fmt(r.falta):'0'}</td>
+      <td>${r.stl!=='—'?`<span class="pill ${r.sit}">${r.stl}</span>`:'<span class="muted">—</span>'}</td>`;
+    tb.appendChild(tr);
+  }
+  document.getElementById('cnt-bf').textContent=`${d.length} SKUs`;
+}
+
 /* ---- tabela ---- */
 function drawTable(data){
   let d=data.filter(r=>!busca||(r.sku+' '+(r.produto||'')).toLowerCase().includes(busca));
@@ -1143,7 +1235,7 @@ document.getElementById('btn-add-blank').onclick=()=>{ const sku=prompt('Código
   saveRow({sku:sku.trim(),produto:sku.trim(),curva:'C',cls:'',estoque:0,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); busca=sku.toLowerCase(); document.getElementById('busca').value=sku; tab='tabela'; switchTab(); };
 
 /* ---- tabs/controls ---- */
-function switchTab(){ ['geral','vendas','estoque','producao','compras','insumos','pagamentos','pedidos','entregas','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
+function switchTab(){ ['geral','vendas','estoque','producao','compras','blackfriday','insumos','pagamentos','pedidos','entregas','tabela'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab)); render(); }
 document.querySelectorAll('.tabs button[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
 /* ---- área restrita de suprimentos (senha) ---- */
@@ -1174,6 +1266,10 @@ document.getElementById('compras-filter').onchange=e=>{comprasFilter=e.target.va
 document.querySelectorAll('#te th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyE===k)sortAscE=!sortAscE;else{sortKeyE=k;sortAscE=['produto','curva'].includes(k);}render();});
 document.getElementById('busca-e').oninput=e=>{buscaE=e.target.value.toLowerCase();render();};
 document.getElementById('busca-i').oninput=e=>{buscaI=e.target.value.toLowerCase();render();};
+document.getElementById('busca-bf').oninput=e=>{buscaBF=e.target.value.toLowerCase();render();};
+document.getElementById('bf-cons').oninput=e=>{bfCons=num(e.target.value)||70;localStorage.setItem('bf_cons',bfCons);render();};
+document.getElementById('bf-otim').oninput=e=>{bfOtim=num(e.target.value)||130;localStorage.setItem('bf_otim',bfOtim);render();};
+document.querySelectorAll('#tbf th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(sortKeyBF===k)sortAscBF=!sortAscBF;else{sortKeyBF=k;sortAscBF=['produto','curva','cenario'].includes(k);}render();});
 document.getElementById('busca-pd').oninput=e=>{buscaPd=e.target.value.toLowerCase();render();};
 document.getElementById('busca-en').oninput=e=>{buscaEn=e.target.value.toLowerCase();render();};
 (function(){ const d=document.getElementById('pd-data'); if(d)d.value=todayISO; })();
