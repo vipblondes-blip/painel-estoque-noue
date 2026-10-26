@@ -91,9 +91,10 @@
   <section id="tab-insumos" style="display:none">
     <div class="card"><h2>Insumos — posição consolidada</h2>
       <p class="note">Estoque = soma de todos os locais. A receber = pedidos em aberto. Posição = estoque + a receber. Necessidade vem da aba Necessidade. Clique para editar custo, fornecedor, lead time e estoque de segurança.</p>
-      <div class="tools"><input id="b-ins" placeholder="Buscar" style="min-width:200px"><span class="muted" id="c-ins" style="font-size:12.5px"></span></div>
+      <div class="tools"><input id="b-ins" placeholder="Buscar" style="min-width:200px"><select id="f-fab"></select><select id="f-cat"></select><span class="muted" id="c-ins" style="font-size:12.5px"></span></div>
       <div class="tbox"><table id="t-ins"><thead><tr>
         <th class="l" data-k="codigo">Código</th><th class="l" data-k="descricao">Insumo</th><th class="l" data-k="categoria">Categoria</th>
+        <th class="l" data-k="fabrica">Fábrica</th>
         <th class="l" data-k="fornecedor">Fornecedor</th><th data-k="lead_time">Lead</th><th data-k="custo">Custo un</th>
         <th data-k="estoque">Estoque</th><th data-k="receber">A receber</th><th data-k="posicao">Posição</th>
         <th data-k="est_seg">Est. seg.</th><th data-k="valor">Valor estoque</th><th>Status</th>
@@ -328,13 +329,20 @@ function drawDash(){
 }
 function drawInsumos(){
   const b=(document.getElementById('b-ins').value||'').toLowerCase();
-  let d=insumosEnriched().filter(x=>!b||(x.codigo+' '+x.descricao+' '+x.categoria).toLowerCase().includes(b));
+  const fab=document.getElementById('f-fab').value, cat=document.getElementById('f-cat').value;
+  // popula filtros
+  const fabs=[...new Set(Object.values(D.insumo).map(i=>i.fabrica).filter(Boolean))].sort();
+  const cats=[...new Set(Object.values(D.insumo).map(i=>i.categoria).filter(Boolean))].sort();
+  const selF=document.getElementById('f-fab'); if(selF.options.length!==fabs.length+1){const cur=selF.value;selF.innerHTML='<option value="">todas as fábricas</option>'+fabs.map(f=>`<option>${f}</option>`).join('');selF.value=cur;}
+  const selC=document.getElementById('f-cat'); if(selC.options.length!==cats.length+1){const cur=selC.value;selC.innerHTML='<option value="">todas as categorias</option>'+cats.map(c=>`<option>${c}</option>`).join('');selC.value=cur;}
+  let d=insumosEnriched().filter(x=>(!b||(x.codigo+' '+x.descricao+' '+x.categoria).toLowerCase().includes(b))&&(!fab||x.fabrica===fab)&&(!cat||x.categoria===cat));
   d.sort((a,b2)=>b2.valor-a.valor);
   const tb=document.querySelector('#t-ins tbody'); tb.innerHTML='';
   d.forEach(x=>{ const i=D.insumo[x.codigo]; const tr=document.createElement('tr');
     const tc=document.createElement('td');tc.className='l';tc.textContent=x.codigo;tr.appendChild(tc);
     const tdd=document.createElement('td');tdd.className='l';tdd.textContent=x.descricao;tr.appendChild(tdd);
     cell(tr,i,'insumo',x.codigo,'categoria',false,'l');
+    cell(tr,i,'insumo',x.codigo,'fabrica',false,'l');
     cell(tr,i,'insumo',x.codigo,'fornecedor',false,'l');
     cell(tr,i,'insumo',x.codigo,'lead_time',true);
     cell(tr,i,'insumo',x.codigo,'custo',true,'',true);
@@ -472,6 +480,7 @@ function bindForms(){
   };
   document.querySelectorAll('.tbox table thead th[data-k]').forEach(()=>{});
   document.getElementById('b-ins').oninput=render; document.getElementById('b-est').oninput=render;
+  document.getElementById('f-fab').onchange=render; document.getElementById('f-cat').onchange=render;
 }
 </script>
 </body>
