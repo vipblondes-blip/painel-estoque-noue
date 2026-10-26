@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nouê — BI de Suprimentos (Supply Chain)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    color-scheme: light dark;
+    --bg:#f6f4ef; --panel:#ffffff; --fg:#1d2733; --muted:#64707d; --line:#e2ddd2; --hl:#faf7f0;
+    --est:#2f7f8c; --out:#c8893a; --dez:#6a8f5f; --nec:#b23b3b; --fat:#7a5cc8;
+    --ok:#3b7d4f; --warn:#b8860b; --bad:#b23b3b;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+    --bg:#15191e; --panel:#1e242b; --fg:#e8eaed; --muted:#9aa5b1; --line:#333b44; --hl:#232b33;
+    --est:#4bb3c2; --out:#e0a65a; --dez:#8fbf80; --nec:#e06b6b; --fat:#a98cf0;
+  }}
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg); color:var(--fg); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; font-size:15px; line-height:1.45}
+  .wrap{max-width:1320px; margin:0 auto; padding:22px 16px 100px}
+  h1{font-size:24px; margin:0 0 3px; font-weight:650}
+  .sub{color:var(--muted); margin:0 0 10px; font-size:13.5px}
+  .status{font-size:12.5px; color:var(--muted); margin-bottom:12px}
+  .tabs{display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line); background:var(--panel); color:var(--muted); border-radius:999px; padding:8px 16px; cursor:pointer; font:inherit}
+  .tabs button.on{background:var(--est); border-color:var(--est); color:#fff; font-weight:600}
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:11px; margin-bottom:16px}
+  .tile{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 15px; border-top:4px solid var(--tc,var(--line))}
+  .tile .lbl{font-size:12px; color:var(--muted)} .tile .big{font-size:23px; font-weight:680; font-variant-numeric:tabular-nums; margin-top:2px}
+  .tile .s{font-size:11.5px; color:var(--muted); margin-top:2px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin-bottom:16px}
+  .card h2{font-size:16.5px; margin:0 0 2px; font-weight:620}
+  .card .note{font-size:12.5px; color:var(--muted); margin:0 0 12px}
+  .tools{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+  input,select{font:inherit; padding:7px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--fg)}
+  button{font:inherit; cursor:pointer; border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:8px; padding:7px 12px}
+  button.primary{background:var(--est); border-color:var(--est); color:#fff; font-weight:600}
+  button.mini{padding:3px 9px; font-size:12.5px} button.danger{color:var(--bad); border-color:var(--bad)}
+  .tbox{max-height:640px; overflow:auto}
+  table{border-collapse:collapse; width:100%; font-size:12.5px; font-variant-numeric:tabular-nums}
+  th{position:sticky; top:0; background:var(--panel); text-align:right; padding:8px 7px; border-bottom:2px solid var(--line); cursor:pointer; white-space:nowrap; color:var(--muted); font-weight:600; z-index:1}
+  th.l,td.l{text-align:left} td{padding:6px 7px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap}
+  td.edit-cell{cursor:text; border-radius:4px} td.edit-cell:hover{background:color-mix(in srgb,var(--out) 16%,transparent); outline:1px dashed var(--out)}
+  td.edit-cell input{width:90px; padding:2px 5px; text-align:right} td.txt input{width:150px; text-align:left}
+  tr:hover td{background:var(--hl)}
+  .pill{display:inline-block; padding:1px 8px; border-radius:999px; font-size:11.5px; border:1px solid var(--line)}
+  .pill.bad{color:var(--bad); border-color:var(--bad)} .pill.ok{color:var(--ok); border-color:var(--ok)} .pill.warn{color:var(--warn); border-color:var(--warn)} .pill.info{color:var(--est);border-color:var(--est)}
+  .muted{color:var(--muted)} .hint{font-size:12px; color:var(--muted); margin:6px 0}
+  .chartbox{overflow-x:auto; position:relative}
+  .gate{position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100}
+  .gate .box{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:28px; max-width:360px; text-align:center}
+  .bar{display:flex; gap:12px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin:2px 0 10px}
+  a.home{font-size:12.5px; color:var(--est); text-decoration:none}
+</style>
+</head>
+<body>
+<div class="gate" id="gate"><div class="box">
+  <h1 style="font-size:19px">🔒 BI de Suprimentos</h1>
+  <p class="sub">Área restrita — dados de custo, fornecedores e estoque de insumos.</p>
+  <input id="gatepw" type="password" placeholder="senha" style="width:100%;margin:8px 0" onkeydown="if(event.key==='Enter')tryGate()">
+  <button class="primary" style="width:100%" onclick="tryGate()">Entrar</button>
+  <div id="gatemsg" class="hint" style="color:var(--bad)"></div>
+</div></div>
+
+<div class="wrap" id="app" style="display:none">
+  <a class="home" href="./index.html">← Painel de performance</a>
+  <h1>Nouê — BI de Suprimentos</h1>
+  <p class="sub">Supply chain de insumos: estoque real por componente e local, necessidade pela produção, pedidos, fluxo de caixa e fornecedores. O time alimenta, o gestor decide.</p>
+  <div id="status" class="status">Carregando…</div>
+
+  <div class="tabs">
+    <button data-tab="dash" class="on">📊 Painel</button>
+    <button data-tab="insumos">🧱 Insumos</button>
+    <button data-tab="estoque">📍 Estoque por local</button>
+    <button data-tab="necessidade">🧮 Necessidade &amp; compras</button>
+    <button data-tab="pedidos">🛒 Pedidos de compra</button>
+    <button data-tab="caixa">💵 Fluxo de caixa</button>
+    <button data-tab="fornecedores">🏭 Fornecedores</button>
+  </div>
+
+  <section id="tab-dash">
+    <div class="tiles" id="dash-tiles"></div>
+    <div class="card"><h2>Alertas de abastecimento</h2><p class="note">Insumos que precisam de ação, ordenados por urgência. Ruptura = estoque zerado; Crítico = abaixo do estoque de segurança; Comprar = produção descoberta.</p><div id="dash-alertas"></div></div>
+    <div class="card"><h2>Valor em estoque por categoria (R$)</h2><div class="chartbox"><div id="chart-cat"></div></div></div>
+    <div class="card"><h2>Estoque por local</h2><div id="dash-local"></div></div>
+  </section>
+
+  <section id="tab-insumos" style="display:none">
+    <div class="card"><h2>Insumos — posição consolidada</h2>
+      <p class="note">Estoque = soma de todos os locais. A receber = pedidos em aberto. Posição = estoque + a receber. Necessidade vem da aba Necessidade. Clique para editar custo, fornecedor, lead time e estoque de segurança.</p>
+      <div class="tools"><input id="b-ins" placeholder="Buscar" style="min-width:200px"><span class="muted" id="c-ins" style="font-size:12.5px"></span></div>
+      <div class="tbox"><table id="t-ins"><thead><tr>
+        <th class="l" data-k="codigo">Código</th><th class="l" data-k="descricao">Insumo</th><th class="l" data-k="categoria">Categoria</th>
+        <th class="l" data-k="fornecedor">Fornecedor</th><th data-k="lead_time">Lead</th><th data-k="custo">Custo un</th>
+        <th data-k="estoque">Estoque</th><th data-k="receber">A receber</th><th data-k="posicao">Posição</th>
+        <th data-k="est_seg">Est. seg.</th><th data-k="valor">Valor estoque</th><th>Status</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-estoque" style="display:none">
+    <div class="card" style="border:2px solid var(--est)"><h2>Lançar / atualizar contagem de estoque</h2>
+      <p class="note">Uma linha por insumo × local. É aqui que o time mantém o <b>estoque real</b> de cada componente. Lançou, salva na hora.</p>
+      <div class="tools">
+        <select id="e-cod"></select>
+        <select id="e-loc"></select>
+        <input id="e-qtd" type="number" min="0" placeholder="quantidade" style="width:130px">
+        <input id="e-lote" placeholder="lote/ref" style="width:130px">
+        <input id="e-resp" placeholder="responsável" style="width:130px">
+        <button class="primary" id="e-add">Lançar contagem</button>
+      </div>
+      <div id="e-msg" class="hint"></div>
+    </div>
+    <div class="card"><h2>Estoque físico por local</h2>
+      <div class="tools"><input id="b-est" placeholder="Buscar" style="min-width:200px"><span class="muted" id="c-est" style="font-size:12.5px"></span></div>
+      <div class="tbox"><table id="t-est"><thead><tr>
+        <th class="l" data-k="codigo">Código</th><th class="l" data-k="descricao">Insumo</th><th class="l" data-k="local">Local</th>
+        <th data-k="qtd">Quantidade</th><th class="l" data-k="lote">Lote/ref</th><th class="l" data-k="data_contagem">Data</th><th class="l" data-k="responsavel">Resp.</th><th data-k="valor">Valor</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-necessidade" style="display:none">
+    <div class="tiles" id="nec-tiles"></div>
+    <div class="card"><h2>Necessidade de insumos pela produção planejada</h2>
+      <p class="note">Necessidade = Σ (produção planejada do produto × qtd por unidade) de cada insumo. A comprar = Necessidade + estoque de segurança − posição (estoque + a receber). Ajuste a produção na aba… (edite aqui o plano por produto).</p>
+      <div class="tbox"><table id="t-nec"><thead><tr>
+        <th class="l" data-k="codigo">Código</th><th class="l" data-k="descricao">Insumo</th>
+        <th data-k="necessidade">Necessidade</th><th data-k="estoque">Estoque</th><th data-k="receber">A receber</th>
+        <th data-k="est_seg">Est. seg.</th><th data-k="comprar">A comprar</th><th data-k="valorComprar">R$ a comprar</th><th>Status</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card"><h2>Plano de produção (editável)</h2>
+      <p class="note">Quanto pretende produzir de cada produto. Alimenta a necessidade acima.</p>
+      <div class="tbox"><table id="t-plano"><thead><tr>
+        <th class="l" data-k="sku">SKU</th><th class="l" data-k="produto">Produto</th><th data-k="producao">Produção planejada</th><th class="l" data-k="fabricante">Fabricante</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-pedidos" style="display:none">
+    <div class="card" style="border:2px solid var(--est)"><h2>Novo pedido de compra</h2>
+      <div class="tools">
+        <input id="p-po" placeholder="Nº PO" style="width:120px">
+        <input id="p-data" type="date">
+        <select id="p-cod"></select>
+        <input id="p-qtd" type="number" min="0" placeholder="qtd" style="width:110px">
+        <input id="p-custo" type="number" step="0.01" placeholder="custo un" style="width:110px">
+        <input id="p-frete" type="number" step="0.01" placeholder="frete" style="width:100px">
+        <input id="p-cond" placeholder="condição pagto" style="width:130px">
+        <button class="primary" id="p-add">Lançar pedido</button>
+      </div>
+      <div id="p-msg" class="hint"></div>
+    </div>
+    <div class="card"><h2>Pedidos de compra</h2>
+      <div class="tbox"><table id="t-ped"><thead><tr>
+        <th class="l" data-k="po">Nº PO</th><th class="l" data-k="data_pedido">Data</th><th class="l" data-k="fornecedor">Fornecedor</th>
+        <th class="l" data-k="descricao">Insumo</th><th data-k="qtd">Qtd</th><th data-k="custo">Custo</th><th data-k="frete">Frete</th><th data-k="total">Total</th>
+        <th class="l" data-k="condicao">Pagto</th><th class="l" data-k="status">Status</th><th></th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-caixa" style="display:none">
+    <div class="tiles" id="caixa-tiles"></div>
+    <div class="card"><h2>Fluxo de caixa de compras — vencimentos por semana</h2>
+      <p class="note">Vencimento estimado a partir da data do pedido + condição de pagamento (ex.: “28 DDL” = +28 dias; “30/60” = metade em 30, metade em 60; “à vista” = na data). Edite a condição no pedido para ajustar.</p>
+      <div class="chartbox"><div id="chart-caixa"></div></div>
+    </div>
+    <div class="card"><h2>Contas a pagar (detalhe)</h2>
+      <div class="tbox"><table id="t-caixa"><thead><tr>
+        <th class="l">Vencimento</th><th class="l">Nº PO</th><th class="l">Fornecedor</th><th class="l">Insumo</th><th>Valor (R$)</th><th class="l">Status</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="tab-fornecedores" style="display:none">
+    <div class="card"><h2>Fornecedores</h2>
+      <p class="note">Cadastro de fornecedores por categoria, com lead time e concentração. Clique para editar.</p>
+      <div class="tbox"><table id="t-for"><thead><tr>
+        <th class="l" data-k="nome">Fornecedor</th><th class="l" data-k="categoria">Categoria</th><th class="l" data-k="cnpj">CNPJ</th>
+        <th data-k="lead_time">Lead</th><th class="l" data-k="prazo_pgto">Prazo pagto</th><th class="l" data-k="contato">Contato</th>
+        <th data-k="itens">Insumos</th><th data-k="valorPed">Comprado (R$)</th><th class="l" data-k="obs">Obs</th>
+      </tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const SB_URL='https://hsqehrwvlkkuuvrszbzq.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhzcWVocnd2bGtrdXV2cnN6YnpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NjQzOTcsImV4cCI6MjA5NjM0MDM5N30.dF5XJi6mCoXh1vrsc_w8pZCHeEip4FPsTnW4PEpilv8';
+const PW='Noue@7212';
+let sb=null, userName=localStorage.getItem('noue_user')||'';
+const fmt=d3.format(','), cfmt=new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1});
+const brl=v=>'R$ '+new Intl.NumberFormat('pt-BR',{notation:'compact',maximumFractionDigits:1}).format(v||0);
+const brlf=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const num=v=>Number(v)||0, hoje=new Date().toISOString().slice(0,10);
+const setStatus=m=>document.getElementById('status').textContent=m;
+let D={insumo:{},estoque:{},composicao:{},pedido:{},fornecedor:{},plano:{}};
+let tab='dash';
+
+function tryGate(){ const v=document.getElementById('gatepw').value;
+  if(v!==PW){document.getElementById('gatemsg').textContent='Senha incorreta.';return;}
+  sessionStorage.setItem('sc_ok','1'); document.getElementById('gate').style.display='none'; document.getElementById('app').style.display=''; boot();
+}
+if(sessionStorage.getItem('sc_ok')==='1'){ document.getElementById('gate').style.display='none'; document.getElementById('app').style.display=''; window.addEventListener('DOMContentLoaded',boot); }
+
+async function loadAll(){
+  const {data,error}=await sb.from('sc_data').select('tipo,rid,data');
+  if(error){setStatus('⚠️ Erro: '+error.message); return false;}
+  D={insumo:{},estoque:{},composicao:{},pedido:{},fornecedor:{},plano:{}};
+  (data||[]).forEach(r=>{ D[r.tipo]=D[r.tipo]||{}; D[r.tipo][r.rid]={...(r.data||{}),_rid:r.rid}; });
+  return true;
+}
+async function save(tipo,rid,obj){
+  D[tipo]=D[tipo]||{}; D[tipo][rid]={...obj,_rid:rid}; render();
+  const row={tipo,rid,data:{...obj},updated_at:new Date().toISOString(),updated_by:userName||null}; delete row.data._rid;
+  const {error}=await sb.from('sc_data').upsert(row,{onConflict:'tipo,rid'});
+  if(error)setStatus('⚠️ Não salvou: '+error.message); else setStatus('✅ Salvo · '+new Date().toLocaleTimeString('pt-BR').slice(0,5));
+}
+async function del(tipo,rid){ delete D[tipo][rid]; render(); await sb.from('sc_data').delete().eq('tipo',tipo).eq('rid',rid); }
+
+async function boot(){
+  if(sb)return; try{sb=window.supabase.createClient(SB_URL,SB_KEY);}catch(e){setStatus('Sem conexão.');return;}
+  await loadAll(); setStatus('✅ Conectado ao banco da Nouê — edições salvam e sincronizam ao vivo.'); render();
+  try{ sb.channel('sc_rt').on('postgres_changes',{event:'*',schema:'public',table:'sc_data'},async()=>{await loadAll();render();}).subscribe(); }catch(e){}
+  document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;switchTab();});
+  bindForms();
+}
+function switchTab(){ ['dash','insumos','estoque','necessidade','pedidos','caixa','fornecedores'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'':'none');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab)); render(); }
+
+/* ---------- derived ---------- */
+function estoquePorCodigo(cod){ return d3.sum(Object.values(D.estoque).filter(e=>e.codigo===cod),e=>num(e.qtd)); }
+function receberPorCodigo(cod){ return d3.sum(Object.values(D.pedido).filter(p=>p.codigo===cod && !/entregue|cancel/i.test(p.status||'')),p=>num(p.qtd)); }
+function necessidadePorCodigo(){
+  const need={};
+  Object.values(D.composicao).forEach(c=>{ const pl=D.plano[c.sku]; const prod=pl?num(pl.producao):0;
+    need[c.codigo]=(need[c.codigo]||0)+prod*num(c.qtd_un); });
+  return need;
+}
+function insumosEnriched(){
+  const need=necessidadePorCodigo();
+  return Object.entries(D.insumo).map(([cod,i])=>{
+    const estoque=estoquePorCodigo(cod), receber=receberPorCodigo(cod), posicao=estoque+receber;
+    const necessidade=Math.round(need[cod]||0); const comprar=Math.max(0,necessidade+num(i.est_seg)-posicao);
+    const valor=estoque*num(i.custo); const valorComprar=comprar*num(i.custo);
+    let st='ok',stl='Ok'; if(estoque<=0){st='bad';stl='Ruptura';} else if(estoque<num(i.est_seg)){st='warn';stl='Crítico';} if(comprar>0){st='bad';stl='Comprar';}
+    return {codigo:cod,...i,estoque,receber,posicao,necessidade,comprar,valor,valorComprar,st,stl};
+  });
+}
+function vencimentos(){
+  const out=[];
+  Object.entries(D.pedido).forEach(([po,p])=>{
+    if(/cancel/i.test(p.status||''))return;
+    const base=p.data_pedido||hoje; const cond=(p.condicao||'').toLowerCase(); const tot=num(p.total)||num(p.subtotal)+num(p.frete);
+    const add=(d,val)=>{ const dt=new Date(base); dt.setDate(dt.getDate()+d); out.push({venc:dt.toISOString().slice(0,10),po,forn:p.fornecedor,desc:p.descricao,valor:val,status:p.status}); };
+    if(/vista/.test(cond)){ add(0,tot); }
+    else{ const m=cond.match(/(\d+)\s*\/\s*(\d+)/); if(m){ add(+m[1],tot/2); add(+m[2],tot/2); }
+      else{ const d=cond.match(/(\d+)/); add(d?+d[1]:28,tot); } }
+  });
+  return out.sort((a,b)=>a.venc.localeCompare(b.venc));
+}
+
+/* ---------- render ---------- */
+function render(){
+  if(tab==='dash')drawDash();
+  if(tab==='insumos')drawInsumos();
+  if(tab==='estoque')drawEstoque();
+  if(tab==='necessidade')drawNec();
+  if(tab==='pedidos')drawPed();
+  if(tab==='caixa')drawCaixa();
+  if(tab==='fornecedores')drawForn();
+  fillSelects();
+}
+function fillSelects(){
+  const cods=Object.entries(D.insumo).map(([c,i])=>`<option value="${c}">${c} · ${i.descricao}</option>`).join('');
+  const locs=['CD Extrema (TPL Platinum)','CD Guarulhos','Fábrica Maker','Fábrica Private','Fábrica SDK','Fábrica — a confirmar','Em trânsito'].map(l=>`<option>${l}</option>`).join('');
+  ['e-cod','p-cod'].forEach(id=>{const el=document.getElementById(id);if(el&&el.options.length<2){el.innerHTML='<option value="">insumo…</option>'+cods;}});
+  const el=document.getElementById('e-loc'); if(el&&el.options.length<2)el.innerHTML='<option value="">local…</option>'+locs;
+}
+function cell(tr,obj,tipo,rid,k,isNum,cls,isDec){
+  const td=document.createElement('td'); td.className=(cls||'')+' edit-cell'; const v=obj[k];
+  td.textContent=(v===undefined||v===null||v==='')?'—':(isNum?fmt(num(v)):v); if(td.textContent==='—')td.style.color='var(--muted)';
+  td.onclick=()=>{ if(td.querySelector('input'))return; const old=td.textContent; td.textContent='';
+    const inp=document.createElement('input'); inp.type=isNum?'number':'text'; if(isNum){inp.min=0;inp.step=isDec?0.01:1;} inp.value=isNum?num(v):(v||''); if(!isNum)inp.className='';
+    td.appendChild(inp); inp.focus(); inp.select&&inp.select();
+    const done=sv=>{ if(sv){ const nv=isNum?num(inp.value):inp.value; save(tipo,rid,{...obj,[k]:nv}); } else render(); };
+    inp.onblur=()=>done(true); inp.onkeydown=e=>{if(e.key==='Enter')inp.blur();else if(e.key==='Escape'){td.textContent=old;}};
+  };
+  tr.appendChild(td); return td;
+}
+
+function drawDash(){
+  const ins=insumosEnriched();
+  const ruptura=ins.filter(x=>x.estoque<=0).length, critico=ins.filter(x=>x.estoque>0&&x.estoque<num(x.est_seg)).length, comprar=ins.filter(x=>x.comprar>0).length;
+  const valEstoque=d3.sum(ins,x=>x.valor);
+  const peds=Object.values(D.pedido); const abertos=peds.filter(p=>!/entregue|cancel/i.test(p.status||'')).length;
+  const valPed=d3.sum(peds,p=>num(p.total)); const aReceber=d3.sum(peds.filter(p=>!/entregue|cancel/i.test(p.status||'')),p=>num(p.total));
+  const t=document.getElementById('dash-tiles');
+  t.innerHTML=[
+    ['Insumos cadastrados',Object.keys(D.insumo).length,'','var(--est)'],
+    ['Valor em estoque',brl(valEstoque),'componentes × custo','var(--fat)'],
+    ['Em RUPTURA',ruptura,'estoque zerado','var(--bad)'],
+    ['CRÍTICO',critico,'abaixo da segurança','var(--warn)'],
+    ['A COMPRAR',comprar,'produção descoberta','var(--out)'],
+    ['Pedidos abertos',abertos,'','var(--est)'],
+    ['A receber (R$)',brl(aReceber),'pedidos em aberto','var(--dez)'],
+    ['Total em pedidos',brl(valPed),'','var(--muted)']
+  ].map(([l,v,s,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">${l}</div><div class="big">${v}</div><div class="s">${s}</div></div>`).join('');
+  // alertas
+  const al=ins.filter(x=>x.st!=='ok').sort((a,b)=>b.valorComprar-a.valorComprar||b.comprar-a.comprar);
+  const wrap=document.getElementById('dash-alertas');
+  wrap.innerHTML=al.length?'<div class="tbox"><table><thead><tr><th class="l">Insumo</th><th class="l">Categoria</th><th>Estoque</th><th>Est. seg.</th><th>A comprar</th><th>R$</th><th class="l">Fornecedor</th><th>Status</th></tr></thead><tbody>'+
+    al.map(x=>`<tr><td class="l">${x.descricao}<div class="muted" style="font-size:11px">${x.codigo}</div></td><td class="l muted">${x.categoria}</td><td>${fmt(x.estoque)}</td><td>${fmt(num(x.est_seg))}</td><td style="font-weight:600;color:${x.comprar>0?'var(--bad)':'inherit'}">${fmt(x.comprar)}</td><td>${x.valorComprar?brl(x.valorComprar):'—'}</td><td class="l muted">${x.fornecedor||'—'}</td><td><span class="pill ${x.st}">${x.stl}</span></td></tr>`).join('')+'</tbody></table></div>'
+    :'<p class="muted">Nenhum alerta — tudo coberto. 🎉</p>';
+  // chart categoria
+  const byCat={}; ins.forEach(x=>byCat[x.categoria]=(byCat[x.categoria]||0)+x.valor);
+  barChart('chart-cat',Object.entries(byCat).map(([k,v])=>({lab:k,v})).sort((a,b)=>b.v-a.v),true);
+  // estoque por local
+  const byLoc={}; Object.values(D.estoque).forEach(e=>{const cu=num((D.insumo[e.codigo]||{}).custo); byLoc[e.local]=byLoc[e.local]||{un:0,val:0}; byLoc[e.local].un+=num(e.qtd); byLoc[e.local].val+=num(e.qtd)*cu;});
+  const lw=document.getElementById('dash-local');
+  lw.innerHTML='<div class="tbox"><table><thead><tr><th class="l">Local</th><th>Unidades</th><th>Valor (R$)</th></tr></thead><tbody>'+
+    Object.entries(byLoc).sort((a,b)=>b[1].val-a[1].val).map(([l,o])=>`<tr><td class="l">${l}</td><td>${fmt(Math.round(o.un))}</td><td>${brlf(o.val)}</td></tr>`).join('')+'</tbody></table></div>';
+}
+function drawInsumos(){
+  const b=(document.getElementById('b-ins').value||'').toLowerCase();
+  let d=insumosEnriched().filter(x=>!b||(x.codigo+' '+x.descricao+' '+x.categoria).toLowerCase().includes(b));
+  d.sort((a,b2)=>b2.valor-a.valor);
+  const tb=document.querySelector('#t-ins tbody'); tb.innerHTML='';
+  d.forEach(x=>{ const i=D.insumo[x.codigo]; const tr=document.createElement('tr');
+    const tc=document.createElement('td');tc.className='l';tc.textContent=x.codigo;tr.appendChild(tc);
+    const tdd=document.createElement('td');tdd.className='l';tdd.textContent=x.descricao;tr.appendChild(tdd);
+    cell(tr,i,'insumo',x.codigo,'categoria',false,'l');
+    cell(tr,i,'insumo',x.codigo,'fornecedor',false,'l');
+    cell(tr,i,'insumo',x.codigo,'lead_time',true);
+    cell(tr,i,'insumo',x.codigo,'custo',true,'',true);
+    [['estoque',x.estoque],['receber',x.receber],['posicao',x.posicao]].forEach(([k,v])=>{const td=document.createElement('td');td.textContent=fmt(v);if(k==='estoque'&&x.st!=='ok')td.style.color='var(--bad)';tr.appendChild(td);});
+    cell(tr,i,'insumo',x.codigo,'est_seg',true);
+    const tv=document.createElement('td');tv.textContent=brlf(x.valor);tv.style.color='var(--fat)';tr.appendChild(tv);
+    const ts=document.createElement('td');ts.innerHTML=`<span class="pill ${x.st}">${x.stl}</span>`;tr.appendChild(ts);
+    tb.appendChild(tr);
+  });
+  document.getElementById('c-ins').textContent=`${d.length} insumos`;
+}
+function drawEstoque(){
+  const b=(document.getElementById('b-est').value||'').toLowerCase();
+  let d=Object.values(D.estoque).filter(e=>!b||((e.codigo||'')+' '+(e.descricao||'')+' '+(e.local||'')).toLowerCase().includes(b));
+  d.sort((a,b2)=>num(b2.qtd)-num(a.qtd));
+  const tb=document.querySelector('#t-est tbody'); tb.innerHTML='';
+  d.forEach(e=>{ const tr=document.createElement('tr'); const cu=num((D.insumo[e.codigo]||{}).custo);
+    const tc=document.createElement('td');tc.className='l';tc.textContent=e.codigo;tr.appendChild(tc);
+    const td=document.createElement('td');td.className='l';td.textContent=e.descricao||'';tr.appendChild(td);
+    cell(tr,e,'estoque',e._rid,'local',false,'l');
+    cell(tr,e,'estoque',e._rid,'qtd',true);
+    cell(tr,e,'estoque',e._rid,'lote',false,'l');
+    const tdt=document.createElement('td');tdt.className='l muted';tdt.textContent=e.data_contagem||'—';tr.appendChild(tdt);
+    cell(tr,e,'estoque',e._rid,'responsavel',false,'l');
+    const tv=document.createElement('td');tv.textContent=brlf(num(e.qtd)*cu);tr.appendChild(tv);
+    const tx=document.createElement('td');const x=document.createElement('button');x.className='mini danger';x.textContent='×';x.onclick=()=>{if(confirm('Remover esta contagem?'))del('estoque',e._rid);};tx.appendChild(x);tr.appendChild(tx);
+    tb.appendChild(tr);
+  });
+  document.getElementById('c-est').textContent=`${d.length} contagens`;
+}
+function drawNec(){
+  const ins=insumosEnriched();
+  const totComprar=d3.sum(ins,x=>x.valorComprar), unComprar=d3.sum(ins,x=>x.comprar);
+  document.getElementById('nec-tiles').innerHTML=[
+    ['Necessidade total (un)',cfmt.format(d3.sum(ins,x=>x.necessidade)),'pela produção planejada','var(--est)'],
+    ['A comprar (un)',cfmt.format(unComprar),'além da posição + segurança','var(--out)'],
+    ['R$ a comprar',brl(totComprar),'valor estimado','var(--fat)']
+  ].map(([l,v,s,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">${l}</div><div class="big">${v}</div><div class="s">${s}</div></div>`).join('');
+  let d=ins.filter(x=>x.necessidade>0||x.comprar>0).sort((a,b)=>b.valorComprar-a.valorComprar);
+  const tb=document.querySelector('#t-nec tbody'); tb.innerHTML='';
+  d.forEach(x=>{ const tr=document.createElement('tr');
+    tr.innerHTML=`<td class="l">${x.codigo}</td><td class="l">${x.descricao}</td><td>${fmt(x.necessidade)}</td><td>${fmt(x.estoque)}</td><td>${fmt(x.receber)}</td><td>${fmt(num(x.est_seg))}</td>
+      <td style="font-weight:600;color:${x.comprar>0?'var(--bad)':'var(--muted)'}">${fmt(x.comprar)}</td><td style="color:var(--fat)">${x.valorComprar?brlf(x.valorComprar):'—'}</td><td><span class="pill ${x.st}">${x.stl}</span></td>`;
+    tb.appendChild(tr);
+  });
+  // plano
+  const pt=document.querySelector('#t-plano tbody'); pt.innerHTML='';
+  Object.entries(D.plano).forEach(([sku,p])=>{ const tr=document.createElement('tr');
+    const t1=document.createElement('td');t1.className='l';t1.textContent=sku;tr.appendChild(t1);
+    const t2=document.createElement('td');t2.className='l';t2.textContent=p.produto||'';tr.appendChild(t2);
+    cell(tr,p,'plano',sku,'producao',true);
+    cell(tr,p,'plano',sku,'fabricante',false,'l');
+    pt.appendChild(tr);
+  });
+}
+function drawPed(){
+  const tb=document.querySelector('#t-ped tbody'); tb.innerHTML='';
+  Object.entries(D.pedido).sort((a,b)=>(b[1].data_pedido||'').localeCompare(a[1].data_pedido||'')).forEach(([po,p])=>{
+    const tr=document.createElement('tr'); const t1=document.createElement('td');t1.className='l';t1.textContent=po;tr.appendChild(t1);
+    cell(tr,p,'pedido',po,'data_pedido',false,'l');
+    cell(tr,p,'pedido',po,'fornecedor',false,'l');
+    const td=document.createElement('td');td.className='l';td.textContent=p.descricao||'';tr.appendChild(td);
+    cell(tr,p,'pedido',po,'qtd',true);
+    cell(tr,p,'pedido',po,'custo',true,'',true);
+    cell(tr,p,'pedido',po,'frete',true,'',true);
+    const tt=document.createElement('td');const total=num(p.qtd)*num(p.custo)+num(p.frete);tt.textContent=brlf(total);tt.style.fontWeight='600';tr.appendChild(tt);
+    cell(tr,p,'pedido',po,'condicao',false,'l');
+    cell(tr,p,'pedido',po,'status',false,'l');
+    const tx=document.createElement('td');const x=document.createElement('button');x.className='mini danger';x.textContent='×';x.onclick=()=>{if(confirm('Remover pedido '+po+'?'))del('pedido',po);};tx.appendChild(x);tr.appendChild(tx);
+    tb.appendChild(tr);
+  });
+}
+function drawCaixa(){
+  const v=vencimentos(); const tot=d3.sum(v,x=>x.valor);
+  const d30=d3.sum(v.filter(x=>x.venc<=addDays(30)),x=>x.valor);
+  document.getElementById('caixa-tiles').innerHTML=[
+    ['Total a pagar',brl(tot),'pedidos não entregues/cancelados','var(--fat)'],
+    ['Vence em 30 dias',brl(d30),'','var(--bad)'],
+    ['Nº de vencimentos',v.length,'','var(--est)']
+  ].map(([l,x,s,c])=>`<div class="tile" style="--tc:${c}"><div class="lbl">${l}</div><div class="big">${x}</div><div class="s">${s}</div></div>`).join('');
+  // weekly chart
+  const wk={}; v.forEach(x=>{const w=weekStart(x.venc); wk[w]=(wk[w]||0)+x.valor;});
+  barChart('chart-caixa',Object.entries(wk).sort().map(([k,val])=>({lab:k.slice(5),v:val})),false);
+  const tb=document.querySelector('#t-caixa tbody'); tb.innerHTML=v.map(x=>`<tr><td class="l">${x.venc}</td><td class="l">${x.po}</td><td class="l">${x.forn||'—'}</td><td class="l">${x.desc||'—'}</td><td>${brlf(x.valor)}</td><td class="l muted">${x.status||''}</td></tr>`).join('');
+}
+function drawForn(){
+  const byCat={}; Object.entries(D.insumo).forEach(([c,i])=>{(byCat[i.fornecedor]=byCat[i.fornecedor]||[]).push(c);});
+  const pedForn={}; Object.values(D.pedido).forEach(p=>{pedForn[p.fornecedor]=(pedForn[p.fornecedor]||0)+num(p.total);});
+  const tb=document.querySelector('#t-for tbody'); tb.innerHTML='';
+  Object.entries(D.fornecedor).sort().forEach(([nome,f])=>{ const tr=document.createElement('tr');
+    const t1=document.createElement('td');t1.className='l';t1.textContent=nome;tr.appendChild(t1);
+    cell(tr,f,'fornecedor',nome,'categoria',false,'l');
+    cell(tr,f,'fornecedor',nome,'cnpj',false,'l');
+    cell(tr,f,'fornecedor',nome,'lead_time',true);
+    cell(tr,f,'fornecedor',nome,'prazo_pgto',false,'l');
+    cell(tr,f,'fornecedor',nome,'contato',false,'l');
+    const ti=document.createElement('td');ti.textContent=(byCat[nome]||[]).length;tr.appendChild(ti);
+    const tv=document.createElement('td');tv.textContent=pedForn[nome]?brlf(pedForn[nome]):'—';tr.appendChild(tv);
+    cell(tr,f,'fornecedor',nome,'obs',false,'l');
+    tb.appendChild(tr);
+  });
+}
+function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+function weekStart(iso){const d=new Date(iso);const day=(d.getDay()+6)%7;d.setDate(d.getDate()-day);return d.toISOString().slice(0,10);}
+function barChart(id,arr,money){
+  const box=document.getElementById(id); box.innerHTML=''; if(!arr.length){box.innerHTML='<p class="muted">Sem dados.</p>';return;}
+  const W=Math.max(box.clientWidth,360),H=240,m={t:16,r:14,b:54,l:14};
+  const svg=d3.select(box).append('svg').attr('width','100%').attr('viewBox',`0 0 ${W} ${H}`).style('min-width','360px');
+  const x=d3.scaleBand(arr.map(d=>d.lab),[m.l,W-m.r]).padding(0.25);
+  const y=d3.scaleLinear([0,d3.max(arr,d=>d.v)*1.12||1],[H-m.b,m.t]);
+  const css=getComputedStyle(document.documentElement);
+  svg.selectAll('rect').data(arr).join('rect').attr('x',d=>x(d.lab)).attr('width',x.bandwidth()).attr('y',d=>y(d.v)).attr('height',d=>y(0)-y(d.v)).attr('rx',4).attr('fill',css.getPropertyValue('--fat').trim());
+  svg.selectAll('text.v').data(arr).join('text').attr('class','v').attr('x',d=>x(d.lab)+x.bandwidth()/2).attr('y',d=>y(d.v)-5).attr('text-anchor','middle').attr('font-size',11).attr('fill','var(--fg)').attr('font-weight',600).text(d=>money?brl(d.v):cfmt.format(d.v));
+  svg.selectAll('text.l').data(arr).join('text').attr('class','l').attr('transform',d=>`translate(${x(d.lab)+x.bandwidth()/2},${H-40}) rotate(30)`).attr('font-size',10.5).attr('fill','var(--muted)').text(d=>String(d.lab).slice(0,16));
+}
+
+/* ---------- forms ---------- */
+function bindForms(){
+  const u=userName; // simple; name optional
+  document.getElementById('e-add').onclick=()=>{
+    const cod=document.getElementById('e-cod').value, loc=document.getElementById('e-loc').value, qtd=num(document.getElementById('e-qtd').value);
+    if(!cod||!loc){document.getElementById('e-msg').textContent='Escolha insumo e local.';return;}
+    const rid=`${cod}|${loc}|${Date.now().toString(36)}`;
+    save('estoque',rid,{codigo:cod,descricao:(D.insumo[cod]||{}).descricao||'',local:loc,qtd,lote:document.getElementById('e-lote').value,data_contagem:hoje,responsavel:document.getElementById('e-resp').value,obs:''});
+    document.getElementById('e-msg').textContent='Contagem lançada.'; ['e-qtd','e-lote','e-resp'].forEach(i=>document.getElementById(i).value='');
+  };
+  document.getElementById('p-data').value=hoje;
+  document.getElementById('p-add').onclick=()=>{
+    let po=document.getElementById('p-po').value.trim(); const cod=document.getElementById('p-cod').value;
+    if(!cod){document.getElementById('p-msg').textContent='Escolha o insumo.';return;}
+    if(!po)po='PO-'+new Date().getFullYear()+'-'+Math.random().toString(36).slice(2,6).toUpperCase();
+    const qtd=num(document.getElementById('p-qtd').value),custo=num(document.getElementById('p-custo').value),frete=num(document.getElementById('p-frete').value);
+    save('pedido',po,{data_pedido:document.getElementById('p-data').value,fornecedor:(D.insumo[cod]||{}).fornecedor||'',codigo:cod,descricao:(D.insumo[cod]||{}).descricao||'',qtd,custo,subtotal:qtd*custo,frete,total:qtd*custo+frete,condicao:document.getElementById('p-cond').value||'28 DDL',status:'Pedido enviado'});
+    document.getElementById('p-msg').textContent='Pedido '+po+' lançado.'; ['p-po','p-qtd','p-custo','p-frete','p-cond'].forEach(i=>document.getElementById(i).value='');
+  };
+  document.querySelectorAll('.tbox table thead th[data-k]').forEach(()=>{});
+  document.getElementById('b-ins').oninput=render; document.getElementById('b-est').oninput=render;
+}
+</script>
+</body>
+</html>
