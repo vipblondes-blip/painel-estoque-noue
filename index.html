@@ -191,7 +191,7 @@
         <label>Planilha Extrema (MG)<input type="file" id="f-csv-ext" accept=".csv,text/csv"></label>
         <button class="primary" id="btn-csv">Atualizar estoque</button>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:10px"><input type="checkbox" id="csv-add" checked style="width:auto"> criar SKUs novos que aparecerem nas planilhas</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:10px"><input type="checkbox" id="csv-add" style="width:auto"> criar SKUs novos que aparecerem nas planilhas <b style="color:var(--bad)">(deixe DESMARCADO — evita que códigos internos/caixas do WMS poluam o painel)</b></label>
       <div id="csv-msg" class="hint"></div>
       <div id="csv-hist" class="csv-hist"></div>
     </div>
@@ -1065,6 +1065,11 @@ function openEdit(r){
 }
 
 /* ---- CSV update ---- */
+// Bloqueia códigos internos do WMS (só números, caixas e homeware) de poluírem o painel
+function skuLixo(sku){
+  if(!/[A-Za-z]/.test(sku))return true; // só números/separadores
+  return /B2B|GLAMOUR|POTE-TM|^PT-|^ORG-|RESERV|BOLEIRA|TWIST|MOCHILA|SABONETEIRA|QUEIJEIRA|MANTEIGUEIRA|PORTA-JOIAS|BOLSAPUFFER|CAIXA/i.test(sku);
+}
 async function parseWMS(file){
   const saldo={}; let lidas=0;
   const txt=await file.text(); const lines=txt.split(/\r?\n/);
@@ -1096,7 +1101,7 @@ document.getElementById('btn-csv').onclick=async()=>{
       if(fe)uprow.est_ext=e.saldo[sku]||0;      // atualiza Extrema só se a planilha veio
       uprow.estoque=num(uprow.est_gru)+num(uprow.est_ext);
       saveRow(uprow); upd++;
-    } else if(addNew){
+    } else if(addNew && !skuLixo(sku)){
       const gg=fg?(g.saldo[sku]||0):0, ee=fe?(e.saldo[sku]||0):0;
       saveRow({sku,produto:sku,curva:'C',cls:'',est_gru:gg,est_ext:ee,estoque:gg+ee,chega_out:0,chega_dez:0,necessidade:0,preco:0,demanda:0,v_ago:0,v_set:0,v_out:0,d_out:0,d_nov:0,d_dez:0,d_jan:0,d_fev:0}); crd++;
     }
