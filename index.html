@@ -414,7 +414,7 @@
     <div class="tiles" id="bf-tiles"></div>
     <div class="card">
       <h2>Black Friday 2026 — qual cenário conseguimos atingir, por produto</h2>
-      <p class="note">Projeção de vendas de novembro nos 3 cenários da sua planilha: <b>Segurar</b> (−20%), <b>Manter</b> (base de hoje) e <b>Acelerar</b> (+20%). <b>Disponível</b> = estoque atual + chegadas até 30/10. O cenário atingível é o melhor cenário que o disponível cobre. % é sobre o cenário <b>Manter</b>.</p>
+      <p class="note">Projeção de vendas de novembro nos 3 cenários da sua planilha: <b>Segurar</b> (−20%), <b>Manter</b> (base de hoje) e <b>Acelerar</b> (+20%). <b>Disponível</b> = estoque real de MG (Extrema) + SP (Guarulhos) + o que está chegando até 30/10 (somatória na coluna Total). O cenário atingível é o melhor cenário que o Total cobre. % é sobre o cenário <b>Manter</b>.</p>
       <div class="tools">
         <input id="busca-bf" placeholder="Buscar SKU ou produto" style="min-width:200px">
         <span class="muted" id="cnt-bf" style="font-size:12.5px"></span>
@@ -431,7 +431,10 @@
           <th data-k="seg">Segurar</th>
           <th data-k="man" style="color:var(--out)">Manter</th>
           <th data-k="ace">Acelerar</th>
-          <th data-k="disp">Disponível</th>
+          <th data-k="dispMG" style="color:var(--dez)">MG real<br><span class="muted" style="font-weight:400;font-size:10.5px">Extrema</span></th>
+          <th data-k="dispSP" style="color:var(--out)">SP real<br><span class="muted" style="font-weight:400;font-size:10.5px">Guarulhos</span></th>
+          <th data-k="dispCheg">Chegando<br><span class="muted" style="font-weight:400;font-size:10.5px">até 30/10</span></th>
+          <th data-k="disp">Total disponível</th>
           <th data-k="pct">% do Manter</th>
           <th class="l" data-k="cenario">Cenário atingível</th>
           <th data-k="falta">Falta p/ Manter</th>
@@ -1076,6 +1079,7 @@ function drawEntregas(data){
 function bfRows(data){
   return data.map(r=>{
     const seg=num(r.bf_seg), man=num(r.bf_man), ace=num(r.bf_ace);
+    const dispMG=num(r.est_ext), dispSP=num(r.est_gru), dispCheg=num(r.chega_out);
     const disp=num(r.estoque)+num(r.chega_out);
     const pct=man>0?disp/man:(disp>0?1:0);
     let cenario,sit,stl;
@@ -1085,7 +1089,7 @@ function bfRows(data){
     else if(disp>=seg){ cenario='Segurar (−20%)'; sit='warn'; stl='Apertado'; }
     else { cenario='Abaixo de Segurar'; sit='bad'; stl='Em risco'; }
     const falta=Math.max(0,man-disp);
-    return {...r,seg,man,ace,disp,pct,cenario,sit,stl,falta};
+    return {...r,seg,man,ace,dispMG,dispSP,dispCheg,disp,pct,cenario,sit,stl,falta};
   });
 }
 function drawBF(data){
@@ -1119,7 +1123,10 @@ function drawBF(data){
       <td>${r.man>0?fmt(r.seg):'—'}</td>
       <td style="font-weight:600;color:var(--out)">${r.man>0?fmt(r.man):'—'}</td>
       <td>${r.man>0?fmt(r.ace):'—'}</td>
-      <td>${fmt(r.disp)}</td>
+      <td style="color:var(--dez)">${fmt(r.dispMG)}</td>
+      <td style="color:var(--out)">${fmt(r.dispSP)}</td>
+      <td class="muted">${fmt(r.dispCheg)}</td>
+      <td style="font-weight:600">${fmt(r.disp)}</td>
       <td style="font-weight:600;color:${r.sit==='bad'?'var(--bad)':r.sit==='warn'?'var(--warn)':r.sit==='ok'?'var(--ok)':'var(--muted)'}">${r.man>0?pctTxt:'—'}</td>
       <td class="l">${r.cenario}</td>
       <td style="color:${r.falta>0?'var(--bad)':'var(--muted)'}">${r.falta>0?fmt(r.falta):'0'}</td>
