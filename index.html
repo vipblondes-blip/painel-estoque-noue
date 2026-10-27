@@ -610,6 +610,7 @@ async function saveRow(d){
   if(Array.isArray(d.insumos))row.insumos=d.insumos;
   if(d.ean!==undefined&&d.ean!==null&&d.ean!=='')row.ean=String(d.ean);
   if(d.fab!==undefined&&d.fab!==null&&d.fab!=='')row.fab=String(d.fab);
+  ['bf_seg','bf_man','bf_ace'].forEach(k=>{ if(d[k]!==undefined&&d[k]!==null&&d[k]!=='')row[k]=num(d[k]); });
   const i=rows.findIndex(r=>r.sku===d.sku); if(i>=0)rows[i]=row; else rows.push(row); render();
   if(!sb){ setStatus('⚠️ Sem conexão — edição não salva.'); return; }
   const {error}=await sb.from(TBL).upsert({sku:row.sku,data:row,updated_at:new Date().toISOString(),updated_by:userName||null},{onConflict:'sku'});
