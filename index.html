@@ -550,12 +550,13 @@ const strip=o=>{const r={};for(const k in o)if(o[k]!==undefined&&o[k]!==null)r[k
 const FIELDS=['estoque','est_gru','est_ext','chega_out','chega_dez','necessidade','preco','demanda','v_ago','v_set','v_out','d_out','d_nov','d_dez','d_jan','d_fev','q09','q10','necout','necnov','necdez','necjan','necfev'];
 const hora=()=>new Date().toLocaleTimeString('pt-BR').slice(0,5);
 
-let estoqueUpd=null;
+let estoqueUpd=null, bfProj={};
 async function loadAll(){
   const {data,error}=await sb.from(TBL).select('sku,data').order('sku');
   if(error){ setStatus('⚠️ Erro ao carregar do banco: '+error.message); return false; }
   if(data&&data.length){ rows=data.map(r=>({...(r.data||{}),sku:r.sku})); }
   try{ const m=await sb.from('painel_estoque_meta').select('v').eq('k','estoque_update').maybeSingle(); if(m&&m.data&&m.data.v)estoqueUpd=m.data.v; }catch(e){}
+  try{ const b=await sb.from('painel_estoque_meta').select('v').eq('k','bf_projecao').maybeSingle(); if(b&&b.data&&b.data.v)bfProj=b.data.v; }catch(e){}
   return true;
 }
 async function marcarEstoqueAtualizado(){
@@ -1079,7 +1080,7 @@ function drawEntregas(data){
 /* ---- Black Friday (cenários da planilha: Segurar/Manter/Acelerar) ---- */
 function bfRows(data){
   return data.map(r=>{
-    const seg=num(r.bf_seg), man=num(r.bf_man), ace=num(r.bf_ace);
+    const bp=bfProj[r.sku]||{}; const seg=num(bp.seg), man=num(bp.man), ace=num(bp.ace);
     const dispMG=num(r.est_ext), dispSP=num(r.est_gru), dispCheg=num(r.chega_out);
     const disp=num(r.estoque)+num(r.chega_out);
     const pct=man>0?disp/man:(disp>0?1:0);
